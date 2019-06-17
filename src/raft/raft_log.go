@@ -64,8 +64,24 @@ func (r *RaftLog) Term(index int64) int64 {
 	return 0
 }
 
-// 找到和当前entry冲突的LOG的索引
+// 找到和当前entry冲突的LOG的周期
 func (r *RaftLog) FindConflict(entry Entry) int64 {
+	if &r.Stable != nil &&
+		r.Stable.LastIndex() == entry.Index &&
+		r.Stable.Term(entry.Index) != entry.Term {
+		return r.Stable.Term(entry.Index)
+	}
+	if r.Unstable.Snapshot != nil &&
+		r.Unstable.Snapshot.Index == entry.Index &&
+		r.Unstable.Snapshot.Term != entry.Term {
+		return r.Unstable.Snapshot.Term
+	}
+	for _, e := range r.Unstable.Entries {
+		if e.Index == entry.Index && e.Term != entry.Term {
+			return e.Term
+		}
+	}
+	// 考虑返回error
 	return 0
 }
 

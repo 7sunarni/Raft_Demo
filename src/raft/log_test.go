@@ -1,47 +1,62 @@
 package raft
 
 import (
-	"awesomeProject1/raft"
-	"fmt"
 	"strconv"
 	"testing"
 )
 
 func TestLog(t *testing.T) {
-	raftLog := raft.RaftLog{}
+	raftLog := RaftLog{}
 
 	raftLog.AppendEntry(0, 0,
-		raft.Entry{
+		Entry{
 			Term:  0,
 			Index: 0,
 			Data:  []byte("000"),
 		})
 
 	for i := 1; i < 10; i++ {
-		raftLog.AppendEntry(int64(i), 0, raft.Entry{
+		raftLog.AppendEntry(int64(i), 0, Entry{
 			Term:  0,
 			Index: int64(i),
 			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
 		})
 	}
 	raftLog.NewTermAppendEntry(10, 1,
-		raft.Entry{
+		Entry{
 			Term:  1,
 			Index: 10,
 			Data:  []byte("AAA"),
 		})
 
 	for i := 11; i < 20; i++ {
-		raftLog.AppendEntry(int64(i), 1, raft.Entry{
+		raftLog.AppendEntry(int64(i), 1, Entry{
 			Term:  1,
 			Index: int64(i),
 			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
 		})
 	}
 
-	fmt.Println(raftLog)
-	raftLog.AppendSnapshot(7, 0, raft.Snapshot{
-		Index: 7,
+	e1 := Entry{
+		Term:  1,
+		Index: 20,
+		Data:  []byte("20"),
+	}
+	e2 := Entry{
+		Term:  2,
+		Index: 21,
+		Data:  []byte("21"),
+	}
+	isOk, i, t2 := raftLog.AppendEntry(20, 1, e1, e2)
+	t.Log(isOk, i, t2)
+	raftLog.AppendEntry(22, 2, Entry{
+		Term:  2,
+		Index: 22,
+		Data:  []byte("22"),
 	})
-	fmt.Println(raftLog)
+	t.Log(raftLog)
+	raftLog.AppendSnapshot(12, 0, Snapshot{
+		Index: 12,
+	})
+	t.Log(raftLog)
 }

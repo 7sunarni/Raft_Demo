@@ -1,8 +1,8 @@
 package main
 
 import (
-	"awesomeProject1/raft"
 	"os"
+	"raft"
 )
 
 func main() {
