@@ -65,8 +65,21 @@ func (n *Node) Start() {
 	go n.Monitor()
 	n.HeartBeatTimeoutTicker = time.NewTicker(20 * time.Second)
 	http.HandleFunc("/message", MsgHandler)
+	http.HandleFunc("/raft", raftHandler)
 	fmt.Println(n.Port + " start")
 	http.ListenAndServe(":"+n.Port, nil)
+}
+
+func raftHandler(w http.ResponseWriter, r *http.Request) {
+	data, e := ioutil.ReadAll(r.Body)
+	if e != nil {
+		fmt.Println("raftHandler readAll error", e)
+	}
+	opera := RaftOperation{}
+	if e := json.Unmarshal(data, &opera); e != nil {
+		fmt.Println("unmarshal error", e)
+	}
+	fmt.Println(opera)
 }
 
 func MsgHandler(w http.ResponseWriter, r *http.Request) {

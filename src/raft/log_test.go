@@ -1,9 +1,23 @@
 package raft
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 )
+
+func TestPersistance(t *testing.T) {
+	log := StableLog{
+		FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log",
+	}
+	//m := Entry{
+	//	Term:  0,
+	//	Index: 1,
+	//}
+	//log.Write(m)
+	fmt.Println(log.FirstIndex())
+	fmt.Println(log.LastIndex())
+}
 
 func TestLog(t *testing.T) {
 	raftLog := RaftLog{}

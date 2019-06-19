@@ -17,10 +17,11 @@ type Msg struct {
 }
 
 type Entry struct {
-	Term  int64
-	Index int64
-	Data  []byte
-	Type  int8
+	Term        int64
+	Index       int64
+	Data        []byte
+	Type        int8
+	CommitCount int8
 }
 
 type Snapshot struct {
@@ -28,4 +29,10 @@ type Snapshot struct {
 	Index        int64
 	Data         []byte
 	SnapshotType int8
+}
+
+type RaftOperation struct {
+	Operation string
+	Key       string
+	Value     int64
 }
