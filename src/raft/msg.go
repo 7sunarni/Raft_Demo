@@ -4,6 +4,8 @@ const (
 	MsgNull = iota
 	MsgHeartbeat
 	MsgHeartBeatResp
+	MsgApp
+	MsgAppResp
 	MsgAskVote
 	MsgVoteResp
 )

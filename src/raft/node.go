@@ -73,11 +73,10 @@ func (n *Node) Start() {
 	if n.State == StateLeader {
 		go n.HeartBeatStart()
 	}
-	n.MsgChan = make(chan Msg, 10000)
+	n.MsgChan = make(chan Msg, 10)
 	go n.Monitor()
 	// 20秒随机两秒方便测试同时超时
 	n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
-	//n.HeartBeatTimeoutTicker = time.NewTicker(20 * time.Second)
 	http.HandleFunc("/message", MsgHandler)
 	http.HandleFunc("/raft", raftHandler)
 	fmt.Println(n.Port + " start")
@@ -93,6 +92,14 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 	if e := json.Unmarshal(data, &opera); e != nil {
 		fmt.Println("unmarshal error", e)
 	}
+	// TODO 把entry作为data放进去
+	msg := Msg{
+		Type: MsgApp,
+		From: n.Port,
+		To:   n.Port,
+	}
+	n.MsgChan <- msg
+	w.Write(nil)
 	fmt.Println(opera)
 }
 
@@ -107,8 +114,6 @@ func MsgHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if msg.Type == MsgVoteResp {
 		fmt.Println("recv vote resp", msg)
-		//v, s := <-n.MsgChan
-		//fmt.Println(v, s)
 	}
 	n.MsgChan <- msg
 	w.Write(nil)
@@ -150,8 +155,8 @@ func (n *Node) Monitor() {
 			}
 			fmt.Println("timeoutTicker", c, ok)
 			if n.State == StateFollower {
+				fmt.Println("heartbeat time out, start new election term")
 				go n.startElection()
-				fmt.Println("heartbeat time out,start new election term")
 			}
 		case msg := <-n.MsgChan:
 			go n.MsgHandler(msg)
@@ -163,9 +168,8 @@ func (n *Node) startElection() {
 		return
 	}
 	n.State = StateCandidate
-	// 取消心跳 TODO 增加选举周期超时
+	// 取消心跳
 	n.HeartBeatTimeoutTicker.Stop()
-	//n.HeartBeatTimeoutTicker = nil
 	n.Term++
 	// 先投一票给自己
 	n.Quorum = 1
@@ -213,9 +217,35 @@ func (n *Node) MsgHandler(msg Msg) {
 			fmt.Println("heartbeat resp")
 		}
 		break
+	case MsgApp:
+		if n.State == StateLeader {
+			// TODO 放入log中
+			//n.Log.AppendEntry()
+			fmt.Println(n.Port + " rcv App as leader")
+			broadCastMsgApp := Msg{
+				Type: MsgApp,
+				From: n.Port,
+				Data: msg.Data,
+			}
+			n.visit(broadCastMsgApp)
+		} else {
+			// TODO 放入log中
+			//n.Log.AppendEntry()
+			// 收到消息后返回，待整理返回的数据
+			fmt.Println(n.Port + " rcv App as follower")
+			broadCastMsgAppResp := Msg{
+				Type: MsgAppResp,
+				From: n.Port,
+				To:   msg.From,
+			}
+			go n.MsgSender(broadCastMsgAppResp)
+		}
+	case MsgAppResp:
+		fmt.Println(n.Port, "rcv msg app resp")
 	case MsgAskVote:
 		if n.State == StateFollower {
 			// TODO  判断选举周期 msg.Term > n.Term
+			// 投票只能投一票bug，投了别人就不能投自己
 			voteMsg := Msg{
 				Type: MsgVoteResp,
 				To:   msg.From,
