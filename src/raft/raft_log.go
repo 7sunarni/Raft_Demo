@@ -17,20 +17,21 @@ type RaftLog struct {
 
 // 向LOG中添加日志，添加成功后返回true、添加的index和term
 // 添加失败后返回false、当前LOG中的最大index和term
-func (r *RaftLog) AppendEntry(index, term int64, entry ...Entry) (isOk bool, i int64, t int64) {
+func (r *RaftLog) AppendEntry(index, term int64, entries ...Entry) (isOk bool, i int64, t int64) {
 	isMatch, err := r.MatchTerm(index, term)
 	if err != nil || !isMatch {
 		lastIndex, lastTerm := r.LastIndexAndTerm()
 		return false, lastIndex, lastTerm
 	}
-	r.Unstable.AppendEntry(entry...)
+	r.Unstable.AppendEntry(entries...)
+	r.Committed += int64(len(entries))
 	return true, index, term
 }
 
 // 向LOG中添加新周期的日志，添加成功后返回true、添加的index和term
 // 添加失败后返回false、当前LOG中的最大index和term
-func (r *RaftLog) NewTermAppendEntry(index, term int64, entry ...Entry) (isOk bool, i int64, t int64) {
-	return r.AppendEntry(index, term-1, entry...)
+func (r *RaftLog) NewTermAppendEntry(index, term int64, entries ...Entry) (isOk bool, i int64, t int64) {
+	return r.AppendEntry(index, term-1, entries...)
 }
 
 // 向LOG中添加快照

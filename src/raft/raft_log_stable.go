@@ -7,6 +7,11 @@ import (
 	"os"
 )
 
+const (
+	TestLogFilePrefix = "F:\\_personal_github\\Raft_Demo\\src\\"
+	TestLogFileSuffix = ".log"
+)
+
 // 持久化的LOG
 type StableLog struct {
 	FileName string

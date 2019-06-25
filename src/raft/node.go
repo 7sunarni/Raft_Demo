@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"time"
 )
@@ -13,6 +14,10 @@ const (
 	StateFollower = iota
 	StateCandidate
 	StateLeader
+)
+const (
+	TestHeartBeatTimeout = 20
+	TestHeartBeat        = TestHeartBeatTimeout - 15
 )
 
 type Node struct {
@@ -35,14 +40,21 @@ type Node struct {
 	ElectionTimeoutTicker time.Ticker
 
 	Port string
+
+	Log RaftLog
 }
 
 var n *Node
 
 func NewNode(port string) *Node {
+	stableLog := StableLog{FileName: TestLogFilePrefix + port + TestLogFileSuffix}
+	raftLog := RaftLog{
+		Stable: stableLog,
+	}
 	n = &Node{
 		Port:      port,
 		OtherNode: make(map[string]string),
+		Log:       raftLog,
 	}
 	return n
 }
@@ -63,7 +75,9 @@ func (n *Node) Start() {
 	}
 	n.MsgChan = make(chan Msg, 10000)
 	go n.Monitor()
-	n.HeartBeatTimeoutTicker = time.NewTicker(20 * time.Second)
+	// 20秒随机两秒方便测试同时超时
+	n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
+	//n.HeartBeatTimeoutTicker = time.NewTicker(20 * time.Second)
 	http.HandleFunc("/message", MsgHandler)
 	http.HandleFunc("/raft", raftHandler)
 	fmt.Println(n.Port + " start")
@@ -155,19 +169,13 @@ func (n *Node) startElection() {
 	n.Term++
 	// 先投一票给自己
 	n.Quorum = 1
-	for _, p := range n.OtherNode {
-		if p == n.Port {
-			continue
-		}
-		msg := Msg{
-			Type: MsgAskVote,
-			To:   p,
-			From: n.Port,
-			Data: nil,
-			Term: n.Term,
-		}
-		go n.MsgSender(msg)
+	msg := Msg{
+		Type: MsgAskVote,
+		From: n.Port,
+		Data: nil,
+		Term: n.Term,
 	}
+	n.visit(msg)
 }
 
 func (n *Node) MsgHandler(msg Msg) {
@@ -184,7 +192,8 @@ func (n *Node) MsgHandler(msg Msg) {
 		break
 	case MsgHeartbeat:
 		n.State = StateFollower
-		n.HeartBeatTimeoutTicker = time.NewTicker(20 * time.Second)
+		// TODO 封装成函数
+		n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
 		if n.State != StateLeader {
 			var otherNode map[string]string
 			json.Unmarshal(msg.Data, &otherNode)
@@ -234,38 +243,28 @@ func (n *Node) HeartBeatStart() {
 		}
 	}()
 	n.OtherNode[n.Port] = n.Port
-	t := time.NewTicker(5 * time.Second)
+	heartBeat := time.NewTicker(TestHeartBeat * time.Second)
 	for {
 		select {
-		case <-t.C:
-			// 封装
-			for p, _ := range n.OtherNode {
-				if p == n.Port {
-					continue
-				}
-				d := n.OtherNode
-				data, e := json.Marshal(d)
-				if e != nil {
-					fmt.Println("data error")
-				}
-				msg := Msg{
-					Type: MsgHeartbeat,
-					To:   p,
-					From: n.Port,
-					Data: data,
-					Term: n.Term,
-				}
-
-				// 主要用于测试时候方便各个节点的时间不相同保证心跳时间不同
-				time.Sleep(time.Second)
-				go n.MsgSender(msg)
+		case <-heartBeat.C:
+			d := n.OtherNode
+			data, e := json.Marshal(d)
+			if e != nil {
+				fmt.Println("data error")
 			}
+			msg := Msg{
+				Type: MsgHeartbeat,
+				From: n.Port,
+				Data: data,
+				Term: n.Term,
+			}
+			n.visit(msg)
 		}
 	}
 }
 
 func (n *Node) checkQuorum() bool {
-	b := n.Quorum >= int64((len(n.OtherNode)-1)/2)
+	b := n.Quorum > int64((len(n.OtherNode)-1)/2)
 	fmt.Println("n.Quorum", len(n.OtherNode), b)
 	return b
 }
@@ -281,4 +280,16 @@ func (n *Node) becomeLeader() {
 
 func (n *Node) changeLeader() {
 
+}
+
+// visit函数用于向所有的节点发送一条消息，
+// 比如心跳、超时选举、更新entry等操作
+func (n *Node) visit(msg Msg) {
+	for p := range n.OtherNode {
+		if p == n.Port {
+			continue
+		}
+		msg.To = p
+		go n.MsgSender(msg)
+	}
 }

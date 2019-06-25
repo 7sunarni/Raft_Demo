@@ -20,8 +20,10 @@ func TestPersistance(t *testing.T) {
 }
 
 func TestLog(t *testing.T) {
-	raftLog := RaftLog{}
-
+	stableLog := StableLog{FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log"}
+	raftLog := RaftLog{
+		Stable: stableLog,
+	}
 	raftLog.AppendEntry(0, 0,
 		Entry{
 			Term:  0,
@@ -72,5 +74,5 @@ func TestLog(t *testing.T) {
 	raftLog.AppendSnapshot(12, 0, Snapshot{
 		Index: 12,
 	})
-	t.Log(raftLog)
+	t.Logf("raftLog.Committed %v \n", raftLog.Committed)
 }
