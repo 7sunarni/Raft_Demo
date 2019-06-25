@@ -10,6 +10,9 @@ type LogStorage interface {
 type RaftLog struct {
 	Stable   StableLog
 	Unstable UnstableLog
+	// Committed提交表示已经写入到Unstable中的索引
+	// 每次append entry到stable中不一定会成功
+	Committed int64
 }
 
 // 向LOG中添加日志，添加成功后返回true、添加的index和term

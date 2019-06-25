@@ -3,6 +3,7 @@ package raft
 type UnstableLog struct {
 	Snapshot *Snapshot
 	Entries  []Entry
+	Offset   int64
 }
 
 func (u *UnstableLog) FirstIndex() int64 {
@@ -38,8 +39,9 @@ func (u *UnstableLog) Term(index int64) int64 {
 	return 0
 }
 
-func (u *UnstableLog) AppendEntry(entry ...Entry) {
-	u.Entries = append(u.Entries, entry...)
+func (u *UnstableLog) AppendEntry(entries ...Entry) {
+	u.Entries = append(u.Entries, entries...)
+	u.Offset += int64(len(entries))
 }
 
 // Snapshot中的Data包括了全部的entry？
@@ -64,4 +66,10 @@ func (u *UnstableLog) ShrinkEntry(index int64) bool {
 		return true
 	}
 	return false
+}
+
+// StableTo 是将unstable中的数据通过index持久化到stable储存中
+// 然后更新offset，再shrinkEntries
+func (u *UnstableLog) StableTo(index int64) {
+
 }
