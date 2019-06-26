@@ -95,6 +95,9 @@ func (r *RaftLog) LastIndexAndTerm() (index, term int64) {
 	if lastIndex = r.Unstable.LastIndex(); lastIndex == 0 {
 		lastIndex = r.Stable.LastIndex()
 	}
+	if len(r.Unstable.Entries) == 0 {
+		return 0, 0
+	}
 	lastTerm := r.Unstable.Entries[len(r.Unstable.Entries)-1].Term
 	return lastIndex, lastTerm
 }

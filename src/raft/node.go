@@ -25,7 +25,7 @@ type Node struct {
 
 	State int64
 	Term  int64
-	Server
+
 	Quorum int64
 
 	OtherNode map[string]string //其他小伙伴的port
@@ -220,17 +220,30 @@ func (n *Node) MsgHandler(msg Msg) {
 	case MsgApp:
 		if n.State == StateLeader {
 			// TODO 放入log中
-			//n.Log.AppendEntry()
+			index, _ := n.Log.LastIndexAndTerm()
+			e := Entry{
+				Term:  n.Term,
+				Index: index + 1,
+			}
+			n.Log.AppendEntry(e.Index, e.Term, e)
+			fmt.Println("=== leader log ", n.Log)
+			bytes, err := json.Marshal(e)
+			if err != nil {
+				fmt.Println("marshal entry error", e)
+			}
 			fmt.Println(n.Port + " rcv App as leader")
 			broadCastMsgApp := Msg{
 				Type: MsgApp,
 				From: n.Port,
-				Data: msg.Data,
+				Data: bytes,
 			}
 			n.visit(broadCastMsgApp)
 		} else {
-			// TODO 放入log中
-			//n.Log.AppendEntry()
+			e := Entry{
+			}
+			json.Unmarshal(msg.Data, &e)
+			n.Log.AppendEntry(e.Index, e.Term, e)
+			fmt.Println("=== follower log ", n.Log)
 			// 收到消息后返回，待整理返回的数据
 			fmt.Println(n.Port + " rcv App as follower")
 			broadCastMsgAppResp := Msg{
