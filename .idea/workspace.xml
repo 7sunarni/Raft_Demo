@@ -7,10 +7,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1d5c726e-d093-4b43-bd98-f2ceff8907f6" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/raft/log_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/log_test.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/raft/node.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/node.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/raft/raft_log.go" beforeDir="false" afterPath="$PROJECT_DIR$/src/raft/raft_log.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -19,23 +16,23 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="FileEditorManager">
-    <splitter split-orientation="horizontal" split-proportion="0.5090618">
+    <splitter split-orientation="horizontal" split-proportion="0.5463753">
       <split-first>
         <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-          <file pinned="false" current-in-tab="false">
+          <file pinned="false" current-in-tab="true">
             <entry file="file://$PROJECT_DIR$/src/raft/node.go">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="337">
-                  <caret line="245" column="41" selection-start-line="245" selection-start-column="39" selection-end-line="245" selection-end-column="41" />
+                <state relative-caret-position="357">
+                  <caret line="198" column="39" lean-forward="true" selection-start-line="198" selection-start-column="39" selection-end-line="198" selection-end-column="39" />
                 </state>
               </provider>
             </entry>
           </file>
-          <file pinned="false" current-in-tab="true">
+          <file pinned="false" current-in-tab="false">
             <entry file="file://$PROJECT_DIR$/src/raft/raft_log.go">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="215">
-                  <caret line="33" column="38" selection-start-line="33" selection-start-column="38" selection-end-line="33" selection-end-column="38" />
+                <state relative-caret-position="359">
+                  <caret line="92" column="18" selection-start-line="92" selection-start-column="18" selection-end-line="92" selection-end-column="18" />
                 </state>
               </provider>
             </entry>
@@ -71,20 +68,11 @@
               </provider>
             </entry>
           </file>
-          <file pinned="false" current-in-tab="false">
-            <entry file="file://D:/software/golang/src/runtime/panic.go">
-              <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="19740">
-                  <caret line="662" selection-start-line="662" selection-end-line="662" />
-                </state>
-              </provider>
-            </entry>
-          </file>
           <file pinned="false" current-in-tab="true">
             <entry file="file://$PROJECT_DIR$/src/raft/log_test.go">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="137">
-                  <caret line="40" column="20" lean-forward="true" selection-start-line="40" selection-start-column="20" selection-end-line="40" selection-end-column="20" />
+                <state relative-caret-position="1303">
+                  <caret line="54" lean-forward="true" selection-start-line="54" selection-end-line="54" />
                 </state>
               </provider>
             </entry>
@@ -107,8 +95,6 @@
       <find>20</find>
       <find>time</find>
       <find>heartBeat</find>
-      <find>start</find>
-      <find>ticker =</find>
       <find>Ticker =</find>
       <find>MsgHeartbeat</find>
       <find>time.newTIcker</find>
@@ -132,6 +118,8 @@
       <find>index, term</find>
       <find>index,</find>
       <find>ap</find>
+      <find>start</find>
+      <find>ticker =</find>
     </findStrings>
   </component>
   <component name="GOROOT" path="D:\software\golang" />
@@ -156,9 +144,9 @@
         <option value="$PROJECT_DIR$/src/raft/node_test.go" />
         <option value="$PROJECT_DIR$/src/raft/raft_log_stable.go" />
         <option value="$PROJECT_DIR$/src/raft/msg.go" />
-        <option value="$PROJECT_DIR$/src/raft/node.go" />
         <option value="$PROJECT_DIR$/src/raft/log_test.go" />
         <option value="$PROJECT_DIR$/src/raft/raft_log.go" />
+        <option value="$PROJECT_DIR$/src/raft/node.go" />
       </list>
     </option>
   </component>
@@ -297,34 +285,34 @@
     </recent_temporary>
   </component>
   <component name="TestHistory">
-    <history-entry file="TestLog_in_raft - 2019.06.25 at 18h 27m 32s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 17h 22m 55s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.25 at 18h 27m 49s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 17h 23m 57s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.25 at 18h 29m 23s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 17h 27m 05s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.25 at 18h 30m 33s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 17h 37m 14s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.25 at 18h 30m 51s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 18h 36m 58s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.25 at 18h 36m 33s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 18h 37m 31s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.25 at 18h 36m 50s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 18h 37m 35s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.26 at 16h 58m 15s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 18h 38m 38s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.26 at 16h 58m 44s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 18h 38m 56s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
-    <history-entry file="TestLog_in_raft - 2019.06.26 at 16h 58m 46s.xml">
+    <history-entry file="TestLog_in_raft - 2019.06.26 at 18h 39m 07s.xml">
       <configuration name="TestLog in raft" configurationId="GoTestRunConfiguration" />
     </history-entry>
   </component>
@@ -337,7 +325,7 @@
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" />
-      <window_info active="true" anchor="bottom" id="Run" order="2" visible="true" weight="0.3494105" />
+      <window_info anchor="bottom" id="Run" order="2" weight="0.3494105" />
       <window_info anchor="bottom" id="Debug" order="3" weight="0.42443728" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
@@ -345,7 +333,7 @@
       <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
       <window_info anchor="bottom" id="Database Changes" order="8" />
       <window_info anchor="bottom" id="Version Control" order="9" weight="0.3290461" />
-      <window_info anchor="bottom" id="Terminal" order="10" weight="0.6677385" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="10" visible="true" weight="0.41907823" />
       <window_info anchor="bottom" id="Event Log" order="11" side_tool="true" weight="0.3290461" />
       <window_info anchor="bottom" id="Messages" order="12" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
@@ -544,24 +532,24 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/src/raft/raft_log.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="359">
+          <caret line="92" column="18" selection-start-line="92" selection-start-column="18" selection-end-line="92" selection-end-column="18" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/src/raft/log_test.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="137">
-          <caret line="40" column="20" lean-forward="true" selection-start-line="40" selection-start-column="20" selection-end-line="40" selection-end-column="20" />
+        <state relative-caret-position="1303">
+          <caret line="54" lean-forward="true" selection-start-line="54" selection-end-line="54" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/raft/node.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="337">
-          <caret line="245" column="41" selection-start-line="245" selection-start-column="39" selection-end-line="245" selection-end-column="41" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/src/raft/raft_log.go">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="215">
-          <caret line="33" column="38" selection-start-line="33" selection-start-column="38" selection-end-line="33" selection-end-column="38" />
+        <state relative-caret-position="357">
+          <caret line="198" column="39" lean-forward="true" selection-start-line="198" selection-start-column="39" selection-end-line="198" selection-end-column="39" />
         </state>
       </provider>
     </entry>

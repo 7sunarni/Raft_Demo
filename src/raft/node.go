@@ -75,7 +75,7 @@ func (n *Node) Start() {
 	}
 	n.MsgChan = make(chan Msg, 10)
 	go n.Monitor()
-	// 20秒随机两秒方便测试同时超时
+	// 20秒随机几秒方便测试同时超时
 	n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
 	http.HandleFunc("/message", MsgHandler)
 	http.HandleFunc("/raft", raftHandler)
@@ -125,18 +125,12 @@ func (n *Node) MsgSender(msg Msg) {
 	}()
 	fmt.Println("send msg", msg.Type, msg.To)
 	cli := http.Client{}
-	msgReader, e := json.Marshal(msg)
-	if e != nil {
-		fmt.Println("data error", e)
-	}
+	msgReader, _ := json.Marshal(msg)
 	reader := bytes.NewReader(msgReader)
-	go func() {
-		_, e = cli.Post("http://localhost:"+msg.To+"/message", "", reader)
-		if e != nil {
-			delete(n.OtherNode, msg.To)
-		}
-	}()
-	return
+	_, err := cli.Post("http://localhost:"+msg.To+"/message", "", reader)
+	if err != nil {
+		delete(n.OtherNode, msg.To)
+	}
 }
 
 func (n *Node) Monitor() {
@@ -154,14 +148,14 @@ func (n *Node) Monitor() {
 			fmt.Println("timeoutTicker", c, ok)
 			if n.State == StateFollower {
 				fmt.Println("heartbeat time out, start new election term")
-				go n.startElection()
+				go n.startElection(false)
 			}
 		case msg := <-n.MsgChan:
 			go n.MsgHandler(msg)
 		}
 	}
 }
-func (n *Node) startElection() {
+func (n *Node) startElection(voted bool) {
 	if n.State != StateFollower {
 		return
 	}
@@ -170,8 +164,10 @@ func (n *Node) startElection() {
 	n.HeartBeatTimeoutTicker.Stop()
 	// TODO bug log的term增加了之后，收到消息的时候没有更新term
 	n.Term++
-	// 先投一票给自己
-	n.Quorum = 1
+	// 如果没有投票过，则先投一票给自己
+	if !voted {
+		n.Quorum = 1
+	}
 	msg := Msg{
 		Type: MsgAskVote,
 		From: n.Port,
@@ -195,7 +191,6 @@ func (n *Node) MsgHandler(msg Msg) {
 		break
 	case MsgHeartbeat:
 		n.State = StateFollower
-		// TODO 封装成函数
 		n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
 		if n.State != StateLeader {
 			var otherNode map[string]string
@@ -218,9 +213,9 @@ func (n *Node) MsgHandler(msg Msg) {
 		break
 	case MsgApp:
 		if n.State == StateLeader {
-			index, _ := n.Log.LastIndexAndTerm()
+			index, term := n.Log.LastIndexAndTerm()
 			e := Entry{
-				Term:  n.Term,
+				Term:  term,
 				Index: index + 1,
 			}
 			n.Log.AppendEntry(e.Term, e.Index, e)
@@ -255,7 +250,6 @@ func (n *Node) MsgHandler(msg Msg) {
 		fmt.Println(n.Port, "rcv msg app resp")
 	case MsgAskVote:
 		if n.State == StateFollower {
-			// TODO  判断选举周期 msg.Term > n.Term
 			// 投票只能投一票bug，投了别人就不能投自己
 			voteMsg := Msg{
 				Type: MsgVoteResp,
@@ -263,8 +257,16 @@ func (n *Node) MsgHandler(msg Msg) {
 				From: msg.To,
 				Term: n.Term,
 			}
+			var voted bool
+			if msg.Term < n.Term {
+				voteMsg.Data = []byte("REJECT")
+				voted = false
+			} else {
+				voteMsg.Data = []byte("VOTE")
+				voted = true
+			}
 			go n.MsgSender(voteMsg)
-			go n.startElection()
+			go n.startElection(voted)
 		}
 		break
 	case MsgVoteResp:
