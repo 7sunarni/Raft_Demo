@@ -32,13 +32,13 @@ func TestLog(t *testing.T) {
 		})
 
 	for i := 1; i < 10; i++ {
-		raftLog.AppendEntry(int64(i), 0, Entry{
+		raftLog.AppendEntry(0, int64(i), Entry{
 			Term:  0,
 			Index: int64(i),
 			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
 		})
 	}
-	raftLog.NewTermAppendEntry(10, 1,
+	raftLog.NewTermAppendEntry(1, 10,
 		Entry{
 			Term:  1,
 			Index: 10,
@@ -46,7 +46,7 @@ func TestLog(t *testing.T) {
 		})
 
 	for i := 11; i < 20; i++ {
-		raftLog.AppendEntry(int64(i), 1, Entry{
+		raftLog.AppendEntry(1, int64(i), Entry{
 			Term:  1,
 			Index: int64(i),
 			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
@@ -63,7 +63,7 @@ func TestLog(t *testing.T) {
 		Index: 21,
 		Data:  []byte("21"),
 	}
-	isOk, i, t2 := raftLog.AppendEntry(20, 1, e1, e2)
+	isOk, i, t2 := raftLog.AppendEntry(1, 20, e1, e2)
 	t.Log(isOk, i, t2)
 	raftLog.AppendEntry(22, 2, Entry{
 		Term:  2,
@@ -71,8 +71,9 @@ func TestLog(t *testing.T) {
 		Data:  []byte("22"),
 	})
 	t.Log(raftLog)
-	raftLog.AppendSnapshot(12, 0, Snapshot{
+	raftLog.AppendSnapshot(0, 12, Snapshot{
 		Index: 12,
 	})
+	t.Log(raftLog)
 	t.Logf("raftLog.Committed %v \n", raftLog.Committed)
 }

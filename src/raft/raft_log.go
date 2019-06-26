@@ -17,29 +17,29 @@ type RaftLog struct {
 
 // 向LOG中添加日志，添加成功后返回true、添加的index和term
 // 添加失败后返回false、当前LOG中的最大index和term
-func (r *RaftLog) AppendEntry(index, term int64, entries ...Entry) (isOk bool, i int64, t int64) {
-	isMatch, err := r.MatchTerm(index, term)
+func (r *RaftLog) AppendEntry(term, index int64, entries ...Entry) (isOk bool, t int64, i int64) {
+	isMatch, err := r.MatchTerm(term, index)
 	if err != nil || !isMatch {
 		lastIndex, lastTerm := r.LastIndexAndTerm()
 		return false, lastIndex, lastTerm
 	}
 	r.Unstable.AppendEntry(entries...)
 	r.Committed += int64(len(entries))
-	return true, index, term
+	return true, term, index
 }
 
 // 向LOG中添加新周期的日志，添加成功后返回true、添加的index和term
 // 添加失败后返回false、当前LOG中的最大index和term
-func (r *RaftLog) NewTermAppendEntry(index, term int64, entries ...Entry) (isOk bool, i int64, t int64) {
-	return r.AppendEntry(index, term-1, entries...)
+func (r *RaftLog) NewTermAppendEntry(term, index int64, entries ...Entry) (isOk bool, i int64, t int64) {
+	return r.AppendEntry(term-1, index, entries...)
 }
 
 // 向LOG中添加快照
-func (r *RaftLog) AppendSnapshot(index, term int64, snapshot Snapshot) {
+func (r *RaftLog) AppendSnapshot(term, index int64, snapshot Snapshot) {
 	r.Unstable.AppendSnapshot(snapshot)
 }
 
-func (r *RaftLog) MatchTerm(index, term int64) (isMatch bool, err error) {
+func (r *RaftLog) MatchTerm(term, index int64) (isMatch bool, err error) {
 	var firstIndex int64
 	var lastIndex int64
 	if firstIndex = r.Stable.FirstIndex(); firstIndex == 0 {
@@ -90,7 +90,7 @@ func (r *RaftLog) FindConflict(entry Entry) int64 {
 }
 
 // 找到当前LOG中的最大的Index和Term
-func (r *RaftLog) LastIndexAndTerm() (index, term int64) {
+func (r *RaftLog) LastIndexAndTerm() (term, index int64) {
 	var lastIndex int64
 	if lastIndex = r.Unstable.LastIndex(); lastIndex == 0 {
 		lastIndex = r.Stable.LastIndex()

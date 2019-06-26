@@ -92,7 +92,6 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 	if e := json.Unmarshal(data, &opera); e != nil {
 		fmt.Println("unmarshal error", e)
 	}
-	// TODO 把entry作为data放进去
 	msg := Msg{
 		Type: MsgApp,
 		From: n.Port,
@@ -100,7 +99,6 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	n.MsgChan <- msg
 	w.Write(nil)
-	fmt.Println(opera)
 }
 
 func MsgHandler(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +168,7 @@ func (n *Node) startElection() {
 	n.State = StateCandidate
 	// 取消心跳
 	n.HeartBeatTimeoutTicker.Stop()
+	// TODO bug log的term增加了之后，收到消息的时候没有更新term
 	n.Term++
 	// 先投一票给自己
 	n.Quorum = 1
@@ -219,13 +218,12 @@ func (n *Node) MsgHandler(msg Msg) {
 		break
 	case MsgApp:
 		if n.State == StateLeader {
-			// TODO 放入log中
 			index, _ := n.Log.LastIndexAndTerm()
 			e := Entry{
 				Term:  n.Term,
 				Index: index + 1,
 			}
-			n.Log.AppendEntry(e.Index, e.Term, e)
+			n.Log.AppendEntry(e.Term, e.Index, e)
 			fmt.Println("=== leader log ", n.Log)
 			bytes, err := json.Marshal(e)
 			if err != nil {
@@ -242,7 +240,7 @@ func (n *Node) MsgHandler(msg Msg) {
 			e := Entry{
 			}
 			json.Unmarshal(msg.Data, &e)
-			n.Log.AppendEntry(e.Index, e.Term, e)
+			n.Log.AppendEntry(e.Term, e.Index, e)
 			fmt.Println("=== follower log ", n.Log)
 			// 收到消息后返回，待整理返回的数据
 			fmt.Println(n.Port + " rcv App as follower")
