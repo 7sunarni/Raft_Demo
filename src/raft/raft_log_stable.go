@@ -27,6 +27,9 @@ func (s *StableLog) FirstIndex() int64 {
 		}
 		var entry Entry
 		json.Unmarshal(line, &entry)
+		if entry.Data == nil {
+			return -1
+		}
 		return entry.Index
 	}
 	return -1
@@ -45,12 +48,16 @@ func (s *StableLog) LastIndex() int64 {
 		}
 		var entry Entry
 		json.Unmarshal(bytes, &entry)
+		if entry.Data == nil {
+			return -1
+		}
 		return entry.Index
 	}
 	return -1
 }
 func (s *StableLog) Term(index int64) int64 {
-	return 0
+	// TODO 暂时返回 -1 应该遍历然后查找
+	return -1
 }
 
 func (s *StableLog) Write(entry Entry) {

@@ -8,6 +8,13 @@ const (
 	MsgAppResp
 	MsgAskVote
 	MsgVoteResp
+	// TODO
+	MsgProp  // 提出建议：换leader?
+	MsgSnap
+	MsgUnreachable  // 节点不可到达
+	MsgCheckQuorum  // 节点请求leader检查状态
+	MsgReadIndex
+	MsgReadIndexResp
 )
 
 type Msg struct {

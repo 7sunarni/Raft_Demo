@@ -162,7 +162,6 @@ func (n *Node) startElection(voted bool) {
 	n.State = StateCandidate
 	// 取消心跳
 	n.HeartBeatTimeoutTicker.Stop()
-	// TODO bug log的term增加了之后，收到消息的时候没有更新term
 	n.Term++
 	// 如果没有投票过，则先投一票给自己
 	if !voted {
@@ -215,10 +214,10 @@ func (n *Node) MsgHandler(msg Msg) {
 		if n.State == StateLeader {
 			index, term := n.Log.LastIndexAndTerm()
 			e := Entry{
-				Term:  term,
+				Term:  term + 1,
 				Index: index + 1,
 			}
-			n.Log.AppendEntry(e.Term, e.Index, e)
+			n.Log.AppendEntry(term, index, e)
 			fmt.Println("=== leader log ", n.Log)
 			bytes, err := json.Marshal(e)
 			if err != nil {
@@ -235,7 +234,7 @@ func (n *Node) MsgHandler(msg Msg) {
 			e := Entry{
 			}
 			json.Unmarshal(msg.Data, &e)
-			n.Log.AppendEntry(e.Term, e.Index, e)
+			n.Log.AppendEntry(e.Term-1, e.Index-1, e)
 			fmt.Println("=== follower log ", n.Log)
 			// 收到消息后返回，待整理返回的数据
 			fmt.Println(n.Port + " rcv App as follower")

@@ -12,6 +12,7 @@ type RaftLog struct {
 	Unstable UnstableLog
 	// Committed提交表示已经写入到Unstable中的索引
 	// 每次append entry到stable中不一定会成功
+	// Committed的值是 len(entry)+1 = LastEntry.Index + 1，因为entry的Index索引从0开始
 	Committed int64
 }
 
@@ -50,7 +51,7 @@ func (r *RaftLog) MatchTerm(term, index int64) (isMatch bool, err error) {
 		lastIndex = r.Stable.LastIndex()
 	}
 
-	t := r.Term(index - 1)
+	t := r.Term(index)
 	if t == term {
 		return true, nil
 	}
@@ -59,13 +60,13 @@ func (r *RaftLog) MatchTerm(term, index int64) (isMatch bool, err error) {
 }
 
 func (r *RaftLog) Term(index int64) int64 {
-	if t := r.Unstable.Term(index); t != 0 {
+	if t := r.Unstable.Term(index); t != -1 {
 		return t
 	}
-	if t := r.Stable.Term(index); t != 0 {
+	if t := r.Stable.Term(index); t != -1 {
 		return t
 	}
-	return 0
+	return -1
 }
 
 // 找到和当前entry冲突的LOG的周期
@@ -92,11 +93,11 @@ func (r *RaftLog) FindConflict(entry Entry) int64 {
 // 找到当前LOG中的最大的Index和Term
 func (r *RaftLog) LastIndexAndTerm() (term, index int64) {
 	var lastIndex int64
-	if lastIndex = r.Unstable.LastIndex(); lastIndex == 0 {
-		lastIndex = r.Stable.LastIndex()
+	if lastIndex = r.Unstable.LastIndex(); lastIndex != -1 {
+		lastIndex = r.Unstable.LastIndex()
 	}
 	if len(r.Unstable.Entries) == 0 {
-		return 0, 0
+		return -1, -1
 	}
 	lastTerm := r.Unstable.Entries[len(r.Unstable.Entries)-1].Term
 	return lastIndex, lastTerm

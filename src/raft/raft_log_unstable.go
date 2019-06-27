@@ -23,7 +23,7 @@ func (u *UnstableLog) LastIndex() int64 {
 	if u.Snapshot != nil {
 		return u.Snapshot.Index
 	}
-	return 0
+	return -1
 }
 
 //
@@ -36,7 +36,7 @@ func (u *UnstableLog) Term(index int64) int64 {
 	if u.Snapshot != nil && u.Snapshot.Index == index {
 		return u.Snapshot.Term
 	}
-	return 0
+	return -1
 }
 
 func (u *UnstableLog) AppendEntry(entries ...Entry) {

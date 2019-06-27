@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestPersistance(t *testing.T) {
+func TestPersist(t *testing.T) {
 	log := StableLog{
 		FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log",
 	}
@@ -19,61 +19,75 @@ func TestPersistance(t *testing.T) {
 	fmt.Println(log.LastIndex())
 }
 
-func TestLog(t *testing.T) {
+// 测试添加第一笔数据，添加第一笔数据的term为-1，index为-1
+func TestLogFistInsert(t *testing.T) {
 	stableLog := StableLog{FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log"}
 	raftLog := RaftLog{
 		Stable: stableLog,
 	}
-	raftLog.AppendEntry(0, 0,
+	isOk, i, i2 := raftLog.AppendEntry(-1, -1,
 		Entry{
 			Term:  0,
 			Index: 0,
 			Data:  []byte("000"),
 		})
+	t.Log(isOk, i, i2)
+}
 
+// 测试持续添加数据
+func TestContinuousInsert(t *testing.T) {
+	stableLog := StableLog{FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log"}
+	raftLog := RaftLog{
+		Stable: stableLog,
+	}
+	raftLog.AppendEntry(-1, -1,
+		Entry{
+			Term:  0,
+			Index: 0,
+			Data:  []byte("000"),
+		})
 	for i := 1; i < 10; i++ {
-		raftLog.AppendEntry(0, int64(i), Entry{
+		raftLog.AppendEntry(0, int64(i-1), Entry{
 			Term:  0,
 			Index: int64(i),
 			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
 		})
 	}
-	raftLog.NewTermAppendEntry(1, 10,
-		Entry{
-			Term:  1,
-			Index: 10,
-			Data:  []byte("AAA"),
-		})
+	t.Log(raftLog)
+}
 
+// 测试添加数据跨越数据
+func TestAddEntryCrossTerm(t *testing.T) {
+	stableLog := StableLog{FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log"}
+	raftLog := RaftLog{
+		Stable: stableLog,
+	}
+	raftLog.AppendEntry(-1, -1,
+		Entry{
+			Term:  0,
+			Index: 0,
+			Data:  []byte("000"),
+		})
+	for i := 1; i < 10; i++ {
+		raftLog.AppendEntry(0, int64(i-1), Entry{
+			Term:  0,
+			Index: int64(i),
+			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
+		})
+	}
+	raftLog.AppendEntry(0, 9, Entry{
+		Term:  1,
+		Index: 10,
+		Data:  []byte("101010"),
+	})
 	for i := 11; i < 20; i++ {
-		raftLog.AppendEntry(1, int64(i), Entry{
+		raftLog.AppendEntry(1, int64(i-1), Entry{
 			Term:  1,
 			Index: int64(i),
 			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
 		})
 	}
-
-	e1 := Entry{
-		Term:  1,
-		Index: 20,
-		Data:  []byte("20"),
-	}
-	e2 := Entry{
-		Term:  2,
-		Index: 21,
-		Data:  []byte("21"),
-	}
-	isOk, i, t2 := raftLog.AppendEntry(1, 20, e1, e2)
-	t.Log(isOk, i, t2)
-	raftLog.AppendEntry(22, 2, Entry{
-		Term:  2,
-		Index: 22,
-		Data:  []byte("22"),
-	})
 	t.Log(raftLog)
-	raftLog.AppendSnapshot(0, 12, Snapshot{
-		Index: 12,
-	})
+	raftLog.Unstable.ShrinkEntry(14)
 	t.Log(raftLog)
-	t.Logf("raftLog.Committed %v \n", raftLog.Committed)
 }
