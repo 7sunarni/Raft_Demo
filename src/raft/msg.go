@@ -18,11 +18,13 @@ const (
 )
 
 type Msg struct {
-	Type int64  `json:"type"`
-	Data []byte `json:"data"`
-	To   string `json:"to"`
-	From string `json:"from"`
-	Term int64  `json:"term"`
+	Type   int64  `json:"type"`
+	Data   []byte `json:"data"`
+	To     string `json:"to"`
+	From   string `json:"from"`
+	Term   int64  `json:"term"`
+	Index  int64  `json:"index"`
+	Reject bool   `json:"reject"`
 }
 
 type Entry struct {

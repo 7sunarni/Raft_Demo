@@ -17,16 +17,18 @@ type RaftLog struct {
 }
 
 // 向LOG中添加日志，添加成功后返回true、添加的index和term
-// 添加失败后返回false、当前LOG中的最大index和term
+// 返回数据：
+//  - 成功 返回 true, 添加后的Term，添加后的Index
+//  - 失败 返回 false，当前Log最大的Term和当前Log最大的Term
 func (r *RaftLog) AppendEntry(term, index int64, entries ...Entry) (isOk bool, t int64, i int64) {
 	isMatch, err := r.MatchTerm(term, index)
 	if err != nil || !isMatch {
 		lastIndex, lastTerm := r.LastIndexAndTerm()
-		return false, lastIndex, lastTerm
+		return false, lastTerm, lastIndex
 	}
 	r.Unstable.AppendEntry(entries...)
 	r.Committed += int64(len(entries))
-	return true, term, index
+	return true, entries[len(entries)-1].Term, entries[len(entries)-1].Index
 }
 
 // 向LOG中添加新周期的日志，添加成功后返回true、添加的index和term
@@ -90,7 +92,7 @@ func (r *RaftLog) FindConflict(entry Entry) int64 {
 	return 0
 }
 
-// 找到当前LOG中的最大的Index和Term
+// 找到当前LOG中的最大的Index和Term，如果是空的话则返回-1，-1
 func (r *RaftLog) LastIndexAndTerm() (term, index int64) {
 	var lastIndex int64
 	if lastIndex = r.Unstable.LastIndex(); lastIndex != -1 {

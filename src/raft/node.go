@@ -213,6 +213,7 @@ func (n *Node) MsgHandler(msg Msg) {
 	case MsgApp:
 		if n.State == StateLeader {
 			index, term := n.Log.LastIndexAndTerm()
+			// Leader添加肯定会成功
 			e := Entry{
 				Term:  term + 1,
 				Index: index + 1,
@@ -234,18 +235,22 @@ func (n *Node) MsgHandler(msg Msg) {
 			e := Entry{
 			}
 			json.Unmarshal(msg.Data, &e)
-			n.Log.AppendEntry(e.Term-1, e.Index-1, e)
+			isOk, t, i2 := n.Log.AppendEntry(e.Term-1, e.Index-1, e)
 			fmt.Println("=== follower log ", n.Log)
 			// 收到消息后返回，待整理返回的数据
 			fmt.Println(n.Port + " rcv App as follower")
 			broadCastMsgAppResp := Msg{
-				Type: MsgAppResp,
-				From: n.Port,
-				To:   msg.From,
+				Type:   MsgAppResp,
+				From:   n.Port,
+				To:     msg.From,
+				Term:   t,
+				Index:  i2,
+				Reject: isOk,
 			}
 			go n.MsgSender(broadCastMsgAppResp)
 		}
 	case MsgAppResp:
+		// LEADER对相应的数据进行处理
 		fmt.Println(n.Port, "rcv msg app resp")
 	case MsgAskVote:
 		if n.State == StateFollower {
