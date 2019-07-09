@@ -107,6 +107,8 @@ func readHandler(w http.ResponseWriter, r *http.Request) {
 		strconv.Itoa(time.Now().Second())
 	fmt.Println("generate time:" + string(time.Now().Unix()))
 	fmt.Println("generate requestKey", requestKey)
+
+
 	msg := Msg{
 		Type: MsgReadIndex,
 		From: n.Port,
