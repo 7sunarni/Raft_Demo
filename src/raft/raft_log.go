@@ -27,6 +27,7 @@ func (r *RaftLog) AppendEntry(term, index int64, entries ...Entry) (isOk bool, t
 		return false, lastTerm, lastIndex
 	}
 	r.Unstable.AppendEntry(entries...)
+	// TODO 这里要判断下
 	r.Committed += int64(len(entries))
 	return true, entries[len(entries)-1].Term, entries[len(entries)-1].Index
 }
@@ -103,4 +104,20 @@ func (r *RaftLog) LastIndexAndTerm() (term, index int64) {
 	}
 	lastTerm := r.Unstable.Entries[len(r.Unstable.Entries)-1].Term
 	return lastIndex, lastTerm
+}
+
+// 更新传过来的committed的值
+// 更新失败返回false，更新成功返回true
+func (r *RaftLog) Commit(aimCommitted int64) bool {
+	// 如果当前log的committed大于了传过来的committed
+	// 即当前的提交领先，不用回滚，相等的时候可以返回true
+	if aimCommitted < r.Committed {
+		return false
+	}
+	if lastIndex, _ := r.LastIndexAndTerm(); lastIndex < aimCommitted {
+		return false
+	}
+	// 将committed更新至最大值
+	r.Committed = aimCommitted
+	return false
 }

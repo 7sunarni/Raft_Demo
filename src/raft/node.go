@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -21,7 +22,7 @@ const (
 )
 
 type Node struct {
-	Type int64
+	Type int
 
 	State int64
 	Term  int64
@@ -33,6 +34,8 @@ type Node struct {
 	DataIndex int64
 	MsgChan   chan Msg
 
+	ReadChan chan Msg
+
 	// 心跳超时
 	HeartBeatTimeoutTicker *time.Ticker
 
@@ -42,6 +45,8 @@ type Node struct {
 	Port string
 
 	Log RaftLog
+
+	Read *ReadOnly
 }
 
 var n *Node
@@ -74,15 +79,59 @@ func (n *Node) Start() {
 		go n.HeartBeatStart()
 	}
 	n.MsgChan = make(chan Msg, 10)
+	n.ReadChan = make(chan Msg, 10)
+	n.Read = NewReadOnly()
 	go n.Monitor()
-	// 20秒随机几秒方便测试同时超时
+	// 20秒随机几秒方便测试同时超时，有BUG
 	n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
 	http.HandleFunc("/message", MsgHandler)
 	http.HandleFunc("/raft", raftHandler)
+	http.HandleFunc("/read", readHandler)
 	fmt.Println(n.Port + " start")
 	http.ListenAndServe(":"+n.Port, nil)
 }
 
+// 用于暴露对外read的api
+func readHandler(w http.ResponseWriter, r *http.Request) {
+	data, e := ioutil.ReadAll(r.Body)
+	if e != nil {
+		fmt.Println("raftHandler readAll error", e)
+	}
+	opera := RaftOperation{}
+	if e := json.Unmarshal(data, &opera); e != nil {
+		fmt.Println("unmarshal error", e)
+	}
+	requestKey := n.Port +
+		strconv.Itoa(time.Now().Hour()) +
+		strconv.Itoa(time.Now().Minute()) +
+		strconv.Itoa(time.Now().Second())
+	fmt.Println("generate time:" + string(time.Now().Unix()))
+	fmt.Println("generate requestKey", requestKey)
+	msg := Msg{
+		Type: MsgReadIndex,
+		From: n.Port,
+		To:   n.Port,
+		Data: []byte(requestKey),
+	}
+	n.MsgChan <- msg
+	resp := "NODATA"
+	httpTimeoutTicker := time.NewTicker(20 * time.Second)
+
+forLoop:
+	for {
+		select {
+		case msg := <-n.ReadChan:
+			resp = string(msg.Data)
+			fmt.Println("recv requestKey", resp)
+			break forLoop
+		case <-httpTimeoutTicker.C:
+			break forLoop
+		}
+	}
+	w.Write([]byte(resp))
+}
+
+// 用于暴露对外的api
 func raftHandler(w http.ResponseWriter, r *http.Request) {
 	data, e := ioutil.ReadAll(r.Body)
 	if e != nil {
@@ -101,6 +150,7 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(nil)
 }
 
+// 用于raft节点之间通信的api
 func MsgHandler(w http.ResponseWriter, r *http.Request) {
 	data, e := ioutil.ReadAll(r.Body)
 	if e != nil {
@@ -192,22 +242,44 @@ func (n *Node) MsgHandler(msg Msg) {
 		n.State = StateFollower
 		n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
 		if n.State != StateLeader {
-			var otherNode map[string]string
-			json.Unmarshal(msg.Data, &otherNode)
-			n.OtherNode = otherNode
+			// 这里是否拒绝
+			committed := msg.Index
+			fmt.Println("follower recv heartbeat ", &committed == nil, committed)
+			if committed >= 100 {
+				fmt.Println("follower get read index heart beat")
+				msg.Reject = n.Log.Commit(committed - 100)
+			} else {
+				var otherNode map[string]string
+				json.Unmarshal(msg.Data, &otherNode)
+				n.OtherNode = otherNode
+			}
 			msg.Type = MsgHeartBeatResp
 			temp := msg.From
 			msg.From = msg.To
 			msg.To = temp
-			data, _ := json.Marshal("HeartBeatResp")
-			msg.Data = data
 			go n.MsgSender(msg)
-			fmt.Println(n.Port, "HeartBeat", n.OtherNode, n.Term)
+			//fmt.Println(n.Port, "HeartBeat", n.OtherNode, n.Term)
 		}
 		break
 	case MsgHeartBeatResp:
 		if n.State == StateLeader {
 			fmt.Println("heartbeat resp")
+			// 心跳返回正确后，更新readonly的数据
+			committed := msg.Index
+			fmt.Println("leader recv HeartbeatResp ", &committed == nil, committed)
+			if committed >= 100 && msg.Reject == false {
+				fmt.Println("leader get read index heart beat resp")
+				n.Read.RecvAck(string(msg.Data), msg.From)
+				status := n.Read.ReadOnlyMap[string(msg.Data)]
+				acks := len(status.Acks)
+				if acks > 1+(len(n.OtherNode))/2 {
+					if status.State == false {
+						fmt.Println("====== leader get committed ok ======", acks, (len(n.OtherNode)-1)/2)
+						n.ReadChan <- msg
+						status.State = true
+					}
+				}
+			}
 		}
 		break
 	case MsgApp:
@@ -280,7 +352,29 @@ func (n *Node) MsgHandler(msg Msg) {
 			n.becomeLeader()
 		}
 		break
+	case MsgReadIndex:
+		if n.State == StateLeader {
+			requestKey := string(msg.Data)
+			n.Read.AddRequest(requestKey, n.Log.Committed)
+			n.Read.RecvAck(requestKey, n.Port)
+			msg := Msg{
+				Type:  MsgHeartbeat,
+				From:  n.Port,
+				Data:  []byte(requestKey),
+				Term:  n.Term,
+				Index: n.Log.Committed + 100,
+			}
+			fmt.Println("leader send read index heart beat")
+			n.visit(msg)
+		}
+		if n.Type == StateFollower {
+			// 转发给leader处理
+		}
+		if n.Type == StateCandidate {
+			// 这里应该会报错
+		}
 	}
+
 }
 
 func (n *Node) HeartBeatStart() {
