@@ -72,6 +72,8 @@ func (n *Node) SetNodes(nodes []string) {
 
 func (n *Node) SetState(state int64) {
 	n.State = state
+
+
 }
 
 func (n *Node) Start() {
