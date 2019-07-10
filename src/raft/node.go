@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"time"
 )
@@ -72,8 +73,6 @@ func (n *Node) SetNodes(nodes []string) {
 
 func (n *Node) SetState(state int64) {
 	n.State = state
-
-
 }
 
 func (n *Node) Start() {
@@ -83,9 +82,11 @@ func (n *Node) Start() {
 	n.MsgChan = make(chan Msg, 10)
 	n.ReadChan = make(chan Msg, 10)
 	n.Read = NewReadOnly()
+	// 移动位置，避免出现空指针问题
+	rand.Seed(time.Now().UnixNano())
+	n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout + rand.Int63n(8)) * time.Second)
 	go n.Monitor()
 	// 20秒随机几秒方便测试同时超时，有BUG
-	n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
 	http.HandleFunc("/message", MsgHandler)
 	http.HandleFunc("/raft", raftHandler)
 	http.HandleFunc("/read", readHandler)
@@ -109,7 +110,6 @@ func readHandler(w http.ResponseWriter, r *http.Request) {
 		strconv.Itoa(time.Now().Second())
 	fmt.Println("generate time:" + string(time.Now().Unix()))
 	fmt.Println("generate requestKey", requestKey)
-
 
 	msg := Msg{
 		Type: MsgReadIndex,
@@ -191,15 +191,17 @@ func (n *Node) Monitor() {
 	defer func() {
 		if e := recover(); e != nil {
 			fmt.Println("monitor recover err: ", e)
+			debug.PrintStack()
 		}
 	}()
 	for {
 		select {
-		case c, ok := <-n.HeartBeatTimeoutTicker.C:
+		case c, _ := <-n.HeartBeatTimeoutTicker.C:
 			if n.HeartBeatTimeoutTicker != nil {
 				n.HeartBeatTimeoutTicker.Stop()
 			}
-			fmt.Println("timeoutTicker", c, ok)
+			fmt.Printf("timeoutTicker chan %#v \n", c)
+			fmt.Printf("timeoutTicker ticker %#v \n", n.HeartBeatTimeoutTicker, c)
 			if n.State == StateFollower {
 				fmt.Println("heartbeat time out, start new election term")
 				go n.startElection(false)
@@ -244,7 +246,8 @@ func (n *Node) MsgHandler(msg Msg) {
 		break
 	case MsgHeartbeat:
 		n.State = StateFollower
-		n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout+rand.Int63n(8)) * time.Second)
+		rand.Seed(time.Now().UnixNano())
+		n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout + rand.Int63n(8)) * time.Second)
 		if n.State != StateLeader {
 			// 这里是否拒绝
 			committed := msg.Index
