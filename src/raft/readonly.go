@@ -6,9 +6,9 @@ type ReadOnly struct {
 	ReadOnlyMap   map[string]*ReadIndexStatus
 }
 type ReadIndexStatus struct {
-	Acks      map[string]bool // ack的key是server的ip port信息
-	Committed int64           // 表示某个请求时候的committed值
-	State     bool            //是否已经相应过
+	Acks      map[string]interface{} // ack的key是server的ip port信息
+	Committed int64                  // 表示某个请求时候的committed值
+	State     bool                   //是否已经响应过
 }
 
 func (r *ReadOnly) AddRequest(requestKey string, committed int64) {
@@ -18,7 +18,7 @@ func (r *ReadOnly) AddRequest(requestKey string, committed int64) {
 	r.ReadOnlyQueue = append(r.ReadOnlyQueue, requestKey)
 	r.ReadOnlyMap[requestKey] = &ReadIndexStatus{
 		Committed: committed,
-		Acks:      make(map[string]bool)}
+		Acks:      make(map[string]interface{})}
 }
 
 // 收到端口的数据

@@ -18,8 +18,8 @@ const (
 	StateLeader
 )
 const (
-	TestHeartBeatTimeout = 20
-	TestHeartBeat        = TestHeartBeatTimeout - 15
+	TestHeartBeat        = 5
+	TestHeartBeatTimeout = TestHeartBeat + 10
 )
 
 type Node struct {
@@ -28,9 +28,9 @@ type Node struct {
 	State int64
 	Term  int64
 
-	Quorum int64
+	Quorum map[int64]map[string]interface{} // 用于检查是否满足投票条件
 
-	OtherNode map[string]string //其他小伙伴的port
+	OtherNode map[string]interface{} //其他小伙伴的port
 
 	DataIndex int64
 	MsgChan   chan Msg
@@ -59,8 +59,9 @@ func NewNode(port string) *Node {
 	}
 	n = &Node{
 		Port:      port,
-		OtherNode: make(map[string]string),
+		OtherNode: make(map[string]interface{}),
 		Log:       raftLog,
+		Quorum:    make(map[int64]map[string]interface{}),
 	}
 	return n
 }
@@ -82,11 +83,12 @@ func (n *Node) Start() {
 	n.MsgChan = make(chan Msg, 10)
 	n.ReadChan = make(chan Msg, 10)
 	n.Read = NewReadOnly()
-	// 移动位置，避免出现空指针问题
 	rand.Seed(time.Now().UnixNano())
-	n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout + rand.Int63n(8)) * time.Second)
-	go n.Monitor()
+	// 移动位置，避免出现空指针问题
 	// 20秒随机几秒方便测试同时超时，有BUG
+	duration := time.Duration(TestHeartBeatTimeout + rand.Int63n(5))
+	n.HeartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
+	go n.Monitor()
 	http.HandleFunc("/message", MsgHandler)
 	http.HandleFunc("/raft", raftHandler)
 	http.HandleFunc("/read", readHandler)
@@ -108,7 +110,6 @@ func readHandler(w http.ResponseWriter, r *http.Request) {
 		strconv.Itoa(time.Now().Hour()) +
 		strconv.Itoa(time.Now().Minute()) +
 		strconv.Itoa(time.Now().Second())
-	fmt.Println("generate time:" + string(time.Now().Unix()))
 	fmt.Println("generate requestKey", requestKey)
 
 	msg := Msg{
@@ -200,8 +201,11 @@ func (n *Node) Monitor() {
 			if n.HeartBeatTimeoutTicker != nil {
 				n.HeartBeatTimeoutTicker.Stop()
 			}
-			fmt.Printf("timeoutTicker chan %#v \n", c)
-			fmt.Printf("timeoutTicker ticker %#v \n", n.HeartBeatTimeoutTicker, c)
+			{
+				fmt.Printf("=== timeoutTicker chan  %v \n", c, )
+				fmt.Printf("=== timeoutTicker ticker %v \n", n.HeartBeatTimeoutTicker)
+				fmt.Println("time now", time.Now())
+			}
 			if n.State == StateFollower {
 				fmt.Println("heartbeat time out, start new election term")
 				go n.startElection(false)
@@ -216,13 +220,17 @@ func (n *Node) startElection(voted bool) {
 		return
 	}
 	n.State = StateCandidate
-	// 取消心跳
+	// TODO 增加选举超时，如果投票没投自己就取消选举
 	n.HeartBeatTimeoutTicker.Stop()
 	n.Term++
-	// 如果没有投票过，则先投一票给自己
-	if !voted {
-		n.Quorum = 1
+	// 如果已经投过票，就不投票直接开始返回
+	if voted {
+		return
 	}
+	if _, ok := n.Quorum[n.Term]; !ok {
+		n.Quorum[n.Term] = make(map[string]interface{})
+	}
+	n.Quorum[n.Term][n.Port] = true
 	msg := Msg{
 		Type: MsgAskVote,
 		From: n.Port,
@@ -233,12 +241,10 @@ func (n *Node) startElection(voted bool) {
 }
 
 func (n *Node) MsgHandler(msg Msg) {
-	if msg.Type == MsgVoteResp {
-		fmt.Println("handle vote resp")
-	}
 	defer func() {
 		if e := recover(); e != nil {
 			fmt.Println("MsgHandler recover error", e)
+			debug.PrintStack()
 		}
 	}()
 	switch msg.Type {
@@ -247,7 +253,13 @@ func (n *Node) MsgHandler(msg Msg) {
 	case MsgHeartbeat:
 		n.State = StateFollower
 		rand.Seed(time.Now().UnixNano())
-		n.HeartBeatTimeoutTicker = time.NewTicker(time.Duration(TestHeartBeatTimeout + rand.Int63n(8)) * time.Second)
+		duration := time.Duration(TestHeartBeatTimeout + rand.Int63n(5))
+		n.HeartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
+		{
+			fmt.Printf("=== update hb ticker %v \n", n.HeartBeatTimeoutTicker)
+			fmt.Printf("=== update hb ticker duration %v \n", duration)
+			fmt.Printf("=== update hb ticker now  %v \n", time.Now())
+		}
 		if n.State != StateLeader {
 			// 这里是否拒绝
 			committed := msg.Index
@@ -256,7 +268,7 @@ func (n *Node) MsgHandler(msg Msg) {
 				fmt.Println("follower get read index heart beat")
 				msg.Reject = n.Log.Commit(committed - 100)
 			} else {
-				var otherNode map[string]string
+				var otherNode map[string]interface{}
 				json.Unmarshal(msg.Data, &otherNode)
 				n.OtherNode = otherNode
 			}
@@ -265,27 +277,23 @@ func (n *Node) MsgHandler(msg Msg) {
 			msg.From = msg.To
 			msg.To = temp
 			go n.MsgSender(msg)
-			//fmt.Println(n.Port, "HeartBeat", n.OtherNode, n.Term)
 		}
 		break
 	case MsgHeartBeatResp:
-		if n.State == StateLeader {
-			fmt.Println("heartbeat resp")
+		if n.State != StateLeader {
+			break
+		}
+		committed := msg.Index
+		if committed >= 100 && msg.Reject == false {
 			// 心跳返回正确后，更新readonly的数据
-			committed := msg.Index
-			fmt.Println("leader recv HeartbeatResp ", &committed == nil, committed)
-			if committed >= 100 && msg.Reject == false {
-				fmt.Println("leader get read index heart beat resp")
-				n.Read.RecvAck(string(msg.Data), msg.From)
-				status := n.Read.ReadOnlyMap[string(msg.Data)]
-				acks := len(status.Acks)
-				if acks > 1+(len(n.OtherNode))/2 {
-					if status.State == false {
-						fmt.Println("====== leader get committed ok ======", acks, (len(n.OtherNode)-1)/2)
-						n.ReadChan <- msg
-						status.State = true
-					}
-				}
+			fmt.Println("leader get read index heart beat resp")
+			n.Read.RecvAck(string(msg.Data), msg.From)
+			status := n.Read.ReadOnlyMap[string(msg.Data)]
+			acks := len(status.Acks)
+			if acks > 1+(len(n.OtherNode))/2 && status.State == false {
+				fmt.Println("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
+				n.ReadChan <- msg
+				status.State = true
 			}
 		}
 		break
@@ -311,12 +319,10 @@ func (n *Node) MsgHandler(msg Msg) {
 			}
 			n.visit(broadCastMsgApp)
 		} else {
-			e := Entry{
-			}
+			e := Entry{}
 			json.Unmarshal(msg.Data, &e)
 			isOk, t, i2 := n.Log.AppendEntry(e.Term-1, e.Index-1, e)
 			fmt.Println("=== follower log ", n.Log)
-			// 收到消息后返回，待整理返回的数据
 			fmt.Println(n.Port + " rcv App as follower")
 			broadCastMsgAppResp := Msg{
 				Type:   MsgAppResp,
@@ -333,7 +339,6 @@ func (n *Node) MsgHandler(msg Msg) {
 		fmt.Println(n.Port, "rcv msg app resp")
 	case MsgAskVote:
 		if n.State == StateFollower {
-			// 投票只能投一票bug，投了别人就不能投自己
 			voteMsg := Msg{
 				Type: MsgVoteResp,
 				To:   msg.From,
@@ -353,9 +358,10 @@ func (n *Node) MsgHandler(msg Msg) {
 		}
 		break
 	case MsgVoteResp:
-		fmt.Println("recv vote resp", n.Quorum)
-		n.Quorum++
-		if n.checkQuorum() {
+		n.Quorum[n.Term][msg.From] = true
+		fmt.Println("handle vote resp")
+		fmt.Println(n.Term, n.Quorum)
+		if n.checkQuorum(n.Quorum[n.Term]) {
 			n.becomeLeader()
 		}
 		break
@@ -378,7 +384,7 @@ func (n *Node) MsgHandler(msg Msg) {
 			// 转发给leader处理
 		}
 		if n.Type == StateCandidate {
-			// 这里应该会报错
+			// 转发给leader处理
 		}
 	}
 
@@ -411,10 +417,13 @@ func (n *Node) HeartBeatStart() {
 	}
 }
 
-func (n *Node) checkQuorum() bool {
-	b := n.Quorum > int64((len(n.OtherNode)-1)/2)
-	fmt.Println("n.Quorum", len(n.OtherNode), b)
-	return b
+// 用于校验是否通过大部分节点，通用方法
+func (n *Node) checkQuorum(m map[string]interface{}) bool {
+	fmt.Print("check quorum ", len(m), len(n.OtherNode)/2+1)
+	if len(m) >= len(n.OtherNode)/2+1 {
+		return true
+	}
+	return false
 }
 
 func (n *Node) becomeLeader() {
@@ -422,7 +431,7 @@ func (n *Node) becomeLeader() {
 		return
 	}
 	n.State = StateLeader
-	fmt.Println("===== become leader === ", n.Port)
+	fmt.Printf("===== %v become leader === \n", n.Port)
 	go n.HeartBeatStart()
 }
 
