@@ -85,7 +85,6 @@ func (n *Node) Start() {
 	n.Read = NewReadOnly()
 	rand.Seed(time.Now().UnixNano())
 	// 移动位置，避免出现空指针问题
-	// 20秒随机几秒方便测试同时超时，有BUG
 	duration := time.Duration(TestHeartBeatTimeout + rand.Int63n(5))
 	n.HeartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
 	go n.Monitor()
