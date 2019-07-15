@@ -8,6 +8,21 @@ const (
 	File = "F:\\_personal_github\\Raft_Demo\\src\\test.log"
 )
 
+/*
+实现的测试用例：
+1. 直接向unstable中 append entry
+	1.1 entry的term和之前的一样
+	1.2 entry的term比之前的大一个
+	1.3 entry的index比之前的小，
+	1.4 entry的index和之前相同
+	1.5 entry的index比之前的大
+
+2. 向stable中添加数据，然后向unstable中添加数据
+	2.1 添加后向unstable中写入正常的数据
+	2.2 添加后向unstable中写入异常的数据
+
+*/
+
 func NewLog() *RaftLog {
 	stable := StableLog{
 		FileName: File,
