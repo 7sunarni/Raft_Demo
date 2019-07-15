@@ -46,6 +46,7 @@ func (u *UnstableLog) AppendEntry(entries ...Entry) {
 
 // Snapshot中的Data包括了全部的entry？
 // TODO：判断是否能够添加成功
+// append snapshot的时候增加判断是否能够append
 func (u *UnstableLog) AppendSnapshot(snapshot Snapshot) {
 	u.Snapshot = &snapshot
 	u.ShrinkEntry(snapshot.Index)

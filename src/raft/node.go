@@ -32,6 +32,8 @@ type Node struct {
 
 	OtherNode map[string]interface{} //其他小伙伴的port
 
+	//Progress
+
 	DataIndex int64
 	MsgChan   chan Msg
 
@@ -69,7 +71,12 @@ func NewNode(port string) *Node {
 func (n *Node) SetNodes(nodes []string) {
 	for _, v := range nodes {
 		n.OtherNode[v] = v
+		//n.Progress.Node[v] = ProgressState{
+		//	Active: false,
+		//	Type:   ProgressUnknown,
+		//}
 	}
+
 }
 
 func (n *Node) SetState(state int64) {
@@ -184,6 +191,11 @@ func (n *Node) MsgSender(msg Msg) {
 	_, err := cli.Post("http://localhost:"+msg.To+"/message", "", reader)
 	if err != nil {
 		delete(n.OtherNode, msg.To)
+		//// 其他属性不变，active变成false
+		//n.Node[msg.To] = ProgressState{
+		//	Active: false,
+		//	Type:   n.Node[msg.To].Type,
+		//}
 	}
 }
 
@@ -270,6 +282,9 @@ func (n *Node) MsgHandler(msg Msg) {
 				var otherNode map[string]interface{}
 				json.Unmarshal(msg.Data, &otherNode)
 				n.OtherNode = otherNode
+				//var p Progress
+				//json.Unmarshal(msg.Data, &p)
+				//n.Progress = p
 			}
 			msg.Type = MsgHeartBeatResp
 			temp := msg.From
@@ -401,6 +416,7 @@ func (n *Node) HeartBeatStart() {
 		select {
 		case <-heartBeat.C:
 			d := n.OtherNode
+			//d := n.Progress
 			data, e := json.Marshal(d)
 			if e != nil {
 				fmt.Println("data error")
@@ -448,4 +464,12 @@ func (n *Node) visit(msg Msg) {
 		msg.To = p
 		go n.MsgSender(msg)
 	}
+	// 更新操作
+	//for item := range n.Progress.Node {
+	//	if item == n.Port {
+	//		continue
+	//	}
+	//	msg.To = item
+	//	go n.MsgSender(msg)
+	//}
 }

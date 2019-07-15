@@ -21,9 +21,12 @@ type RaftLog struct {
 //  - 成功 返回 true, 添加后的Term，添加后的Index
 //  - 失败 返回 false，当前Log最大的Term和当前Log最大的Term
 func (r *RaftLog) AppendEntry(term, index int64, entries ...Entry) (isOk bool, t int64, i int64) {
+	lastTerm, lastIndex := r.LastIndexAndTerm()
+	if lastIndex >= index {
+		return false, lastTerm, lastIndex
+	}
 	isMatch, err := r.MatchTerm(term, index)
 	if err != nil || !isMatch {
-		lastIndex, lastTerm := r.LastIndexAndTerm()
 		return false, lastTerm, lastIndex
 	}
 	r.Unstable.AppendEntry(entries...)
@@ -32,30 +35,24 @@ func (r *RaftLog) AppendEntry(term, index int64, entries ...Entry) (isOk bool, t
 	return true, entries[len(entries)-1].Term, entries[len(entries)-1].Index
 }
 
-// 向LOG中添加新周期的日志，添加成功后返回true、添加的index和term
-// 添加失败后返回false、当前LOG中的最大index和term
-func (r *RaftLog) NewTermAppendEntry(term, index int64, entries ...Entry) (isOk bool, i int64, t int64) {
-	return r.AppendEntry(term-1, index, entries...)
-}
-
 // 向LOG中添加快照
 func (r *RaftLog) AppendSnapshot(term, index int64, snapshot Snapshot) {
 	r.Unstable.AppendSnapshot(snapshot)
 }
 
 func (r *RaftLog) MatchTerm(term, index int64) (isMatch bool, err error) {
-	var firstIndex int64
-	var lastIndex int64
-	if firstIndex = r.Stable.FirstIndex(); firstIndex == 0 {
-		firstIndex = r.Unstable.FirstIndex()
-	}
+	//var firstIndex int64
+	//var lastIndex int64
+	//if firstIndex = r.Stable.FirstIndex(); firstIndex == 0 {
+	//	firstIndex = r.Unstable.FirstIndex()
+	//}
+	//
+	//if lastIndex = r.Unstable.LastIndex(); lastIndex == 0 {
+	//	lastIndex = r.Stable.LastIndex()
+	//}
 
-	if lastIndex = r.Unstable.LastIndex(); lastIndex == 0 {
-		lastIndex = r.Stable.LastIndex()
-	}
-
-	t := r.Term(index)
-	if t == term {
+	t := r.Term(index - 1)
+	if t == term || t == term-1 {
 		return true, nil
 	}
 
@@ -96,14 +93,19 @@ func (r *RaftLog) FindConflict(entry Entry) int64 {
 // 找到当前LOG中的最大的Index和Term，如果是空的话则返回-1，-1
 func (r *RaftLog) LastIndexAndTerm() (term, index int64) {
 	var lastIndex int64
+	var lastTerm int64
 	if lastIndex = r.Unstable.LastIndex(); lastIndex != -1 {
 		lastIndex = r.Unstable.LastIndex()
+		lastTerm = r.Unstable.Term(lastIndex)
+		return lastTerm, lastIndex
 	}
-	if len(r.Unstable.Entries) == 0 {
-		return -1, -1
+
+	lastIndex = r.Stable.LastIndex()
+	if lastIndex != -1 {
+		lastTerm = r.Stable.Term(lastIndex)
 	}
-	lastTerm := r.Unstable.Entries[len(r.Unstable.Entries)-1].Term
-	return lastIndex, lastTerm
+
+	return lastTerm, lastIndex
 }
 
 // 更新传过来的committed的值

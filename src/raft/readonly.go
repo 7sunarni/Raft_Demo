@@ -39,4 +39,14 @@ func NewReadOnly() *ReadOnly {
 	return &r
 }
 
+// 移除一条数据
+func (r *ReadOnly) RemoveOne(requestKey string) {
+	_, ok := r.ReadOnlyMap[requestKey]
+	if !ok {
+		// TODO 错误
+	}
+	delete(r.ReadOnlyMap,requestKey)
+	// TODO 将queue里面的数据清除
+}
+
 // 削减操作

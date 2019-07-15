@@ -56,7 +56,24 @@ func (s *StableLog) LastIndex() int64 {
 	return -1
 }
 func (s *StableLog) Term(index int64) int64 {
-	// TODO 暂时返回 -1 应该遍历然后查找
+	file := s.OpenReadFile()
+	if file != nil {
+		reader := bufio.NewReader(file)
+		var bytes []byte
+		for {
+			line, _, err := reader.ReadLine()
+			if err != nil {
+				break
+			}
+			bytes = line
+		}
+		var entry Entry
+		json.Unmarshal(bytes, &entry)
+		if entry.Data == nil {
+			return -1
+		}
+		return entry.Term
+	}
 	return -1
 }
 

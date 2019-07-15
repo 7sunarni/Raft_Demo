@@ -1,93 +1,155 @@
 package raft
 
 import (
-	"fmt"
-	"strconv"
 	"testing"
 )
 
-func TestPersist(t *testing.T) {
-	log := StableLog{
-		FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log",
+const (
+	File = "F:\\_personal_github\\Raft_Demo\\src\\test.log"
+)
+
+func NewLog() *RaftLog {
+	stable := StableLog{
+		FileName: File,
 	}
-	//m := Entry{
-	//	Term:  0,
-	//	Index: 1,
+	raftLog := RaftLog{
+		Stable:   stable,
+		Unstable: UnstableLog{},
+	}
+	return &raftLog
+}
+
+// 测试初始化状态
+func TestInit(t *testing.T) {
+	log := NewLog()
+	term, index := log.LastIndexAndTerm()
+	if term != -1 || index != -1 {
+		t.Fail()
+	}
+}
+
+func TestAppend(t *testing.T) {
+	log := NewLog()
+
+	// 第一次插入数据
+	{
+		term, index := log.LastIndexAndTerm()
+		entry := Entry{
+			Term:  term,
+			Index: index + 1,
+			Data:  []byte{byte(index)},
+		}
+		log.AppendEntry(entry.Term, entry.Index, entry)
+		checkTerm, checkIndex := log.LastIndexAndTerm()
+		if checkTerm != term || checkIndex != index+1 {
+			t.Fatal("first insert error", checkTerm, checkIndex)
+		}
+	}
+	t.Log("insert first")
+
+	// 持续插入数据
+	{
+		term, index := log.LastIndexAndTerm()
+		for i := index + 1; i < index+10; i++ {
+			entry := Entry{
+				Term:  term,
+				Index: int64(i),
+				Data:  []byte{byte(i)},
+			}
+			log.AppendEntry(entry.Term, entry.Index, entry)
+			checkTerm, checkIndex := log.LastIndexAndTerm()
+			if term != term || checkIndex != int64(i) {
+				t.Fatal("continuous 1st insert error", checkTerm, checkIndex)
+			}
+		}
+		t.Log("continuous 1st insert success")
+	}
+
+	// 持续第二次插入数据
+	{
+		term, index := log.LastIndexAndTerm()
+		for i := index + 1; i < index+10; i++ {
+			entry := Entry{
+				Term:  term + 1,
+				Index: int64(i),
+				Data:  []byte{byte(i)},
+			}
+			log.AppendEntry(entry.Term, entry.Index, entry)
+			checkTerm, checkIndex := log.LastIndexAndTerm()
+			if term != checkTerm-1 || checkIndex != int64(i) {
+				t.Fatal("continuous 2nd insert error", checkTerm, checkIndex)
+			}
+		}
+		t.Log("continuous 2nd insert success")
+	}
+}
+
+// 测试向持久化文件中写入日志
+func TestStableLog(t *testing.T) {
+	log := NewLog()
+	//StableWriteOne()
+	//{
+	//	term, index := log.LastIndexAndTerm()
+	//	if term != 0 || index != 0 {
+	//		t.Fatal("stable log error", term, index)
+	//	}
 	//}
-	//log.Write(m)
-	fmt.Println(log.FirstIndex())
-	fmt.Println(log.LastIndex())
+	//StableWriteList()
+	{
+		term, index := log.LastIndexAndTerm()
+		if term != 0 || index != 9 {
+			t.Fatal("stable log error", term, index)
+		}
+	}
+	t.Log("stable log success")
 }
 
-// 测试添加第一笔数据，添加第一笔数据的term为-1，index为-1
-func TestLogFistInsert(t *testing.T) {
-	stableLog := StableLog{FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log"}
-	raftLog := RaftLog{
-		Stable: stableLog,
-	}
-	isOk, i, i2 := raftLog.AppendEntry(-1, -1,
-		Entry{
-			Term:  0,
-			Index: 0,
-			Data:  []byte("000"),
-		})
-	t.Log(isOk, i, i2)
-}
-
-// 测试持续添加数据
-func TestContinuousInsert(t *testing.T) {
-	stableLog := StableLog{FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log"}
-	raftLog := RaftLog{
-		Stable: stableLog,
-	}
-	raftLog.AppendEntry(-1, -1,
-		Entry{
-			Term:  0,
-			Index: 0,
-			Data:  []byte("000"),
-		})
-	for i := 1; i < 10; i++ {
-		raftLog.AppendEntry(0, int64(i-1), Entry{
-			Term:  0,
-			Index: int64(i),
-			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
-		})
-	}
-	t.Log(raftLog)
-}
-
-// 测试添加数据跨越数据
-func TestAddEntryCrossTerm(t *testing.T) {
-	stableLog := StableLog{FileName: "F:\\_personal_github\\Raft_Demo\\src\\test.log"}
-	raftLog := RaftLog{
-		Stable: stableLog,
-	}
-	raftLog.AppendEntry(-1, -1,
-		Entry{
-			Term:  0,
-			Index: 0,
-			Data:  []byte("000"),
-		})
-	for i := 1; i < 10; i++ {
-		raftLog.AppendEntry(0, int64(i-1), Entry{
-			Term:  0,
-			Index: int64(i),
-			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
-		})
-	}
-	raftLog.AppendEntry(0, 9, Entry{
-		Term:  1,
-		Index: 10,
-		Data:  []byte("101010"),
+func StableWriteOne() {
+	log := NewLog()
+	log.Stable.Write(Entry{
+		Term:  0,
+		Index: 0,
+		Data:  []byte{1},
 	})
-	for i := 11; i < 20; i++ {
-		raftLog.AppendEntry(1, int64(i-1), Entry{
-			Term:  1,
+}
+
+func StableWriteList() {
+	log := NewLog()
+	for i := 1; i < 10; i++ {
+		log.Stable.Write(Entry{
+			Term:  int64(0),
 			Index: int64(i),
-			Data:  []byte(strconv.Itoa(i) + strconv.Itoa(i) + strconv.Itoa(i)),
+			Data:  []byte{byte(i)},
 		})
 	}
-	t.Log(raftLog)
-	raftLog.Unstable.ShrinkEntry(14)
-	t.Log(raftLog)
+}
+
+func TestWithStable(t *testing.T) {
+	log := NewLog()
+	// 测试添加失败的情况
+	{
+		entry := Entry{
+			Term:  0,
+			Index: 0,
+		}
+		log.AppendEntry(entry.Term, entry.Index, entry)
+		term, index := log.LastIndexAndTerm()
+		if term != 0 && index != 9 {
+			t.Fatal("append error", term, index)
+		}
+	}
+
+	// 测试添加成功的情况
+	{
+		entry := Entry{
+			Term:  2,
+			Index: 10,
+		}
+		log.AppendEntry(entry.Term, entry.Index, entry)
+		term, index := log.LastIndexAndTerm()
+		if term != 0 && index != 10 {
+			t.Fatal("append error", term, index)
+		}
+	}
+
 }
