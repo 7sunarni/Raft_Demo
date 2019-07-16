@@ -41,3 +41,12 @@ func (v *ValueMap) GetValue(key string) (value int64, err error) {
 	}
 	return value, nil
 }
+
+func (v *ValueMap) DeleteValue(key string) (err error) {
+	_, ok := v.Map[key]
+	if !ok {
+		return errors.New("key not exist")
+	}
+	delete(v.Map, key)
+	return nil
+}

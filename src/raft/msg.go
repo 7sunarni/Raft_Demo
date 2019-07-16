@@ -9,12 +9,18 @@ const (
 	MsgAskVote
 	MsgVoteResp
 	// TODO
-	MsgProp  // 提出建议：换leader?
-	MsgSnap  // 快照
+	MsgProp         // 提出建议：换leader?
+	MsgSnap         // 快照
 	MsgUnreachable  // 节点不可到达
 	MsgCheckQuorum  // 节点请求leader检查状态
 	MsgReadIndex
 	MsgReadIndexResp
+)
+
+const (
+	OperationAdd    = "ADD"
+	OperationUpdate = "UPDATE"
+	OperationGet    = "GET"
 )
 
 type Msg struct {
@@ -25,6 +31,10 @@ type Msg struct {
 	Term   int64  `json:"term"`
 	Index  int64  `json:"index"`
 	Reject bool   `json:"reject"`
+}
+
+type HttpMsg struct{
+
 }
 
 type Entry struct {

@@ -37,7 +37,7 @@ type Node struct {
 	DataIndex int64
 	MsgChan   chan Msg
 
-	HttpChan chan Msg
+	HttpChan chan RaftOperation
 
 	// 心跳超时
 	HeartBeatTimeoutTicker *time.Ticker
@@ -50,6 +50,12 @@ type Node struct {
 	Log RaftLog
 
 	Read *ReadOnly
+
+	// debug日志，用于在前台展示
+	RaftDebugLog
+
+	// 存放k-v的封装集合
+	*ValueMap
 }
 
 var n *Node
@@ -65,6 +71,7 @@ func NewNode(port string) *Node {
 		Log:       raftLog,
 		Quorum:    make(map[int64]map[string]interface{}),
 		Progress:  make(map[string]ProgressState),
+		ValueMap:  NewValueMap(),
 	}
 	return n
 }
@@ -89,7 +96,7 @@ func (n *Node) Start() {
 		go n.HeartBeatStart()
 	}
 	n.MsgChan = make(chan Msg, 10)
-	n.HttpChan = make(chan Msg, 10)
+	n.HttpChan = make(chan RaftOperation, 10)
 	n.Read = NewReadOnly()
 	rand.Seed(time.Now().UnixNano())
 	// 移动位置，避免出现空指针问题
@@ -108,48 +115,40 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 	if e != nil {
 		fmt.Println("raftHandler readAll error", e)
 	}
-	opera := RaftOperation{}
-	if e := json.Unmarshal(data, &opera); e != nil {
+	operation := RaftOperation{}
+	if e := json.Unmarshal(data, &operation); e != nil {
 		fmt.Println("unmarshal error", e)
 	}
-	// TODO 考虑用hash生成key
-	requestKey := n.Port +
-		strconv.Itoa(time.Now().Hour()) +
-		strconv.Itoa(time.Now().Minute()) +
-		strconv.Itoa(time.Now().Second())
-	fmt.Println("generate requestKey", requestKey)
 
 	msg := Msg{
 		From: n.Port,
 		To:   n.Port,
-		Data: []byte(requestKey),
+		Data: data,
 	}
 
-	if opera.Operation == "ADD" {
+	if operation.Operation == OperationAdd {
 		msg.Type = MsgApp
 	}
-	if opera.Operation == "UPDATE" {
+	if operation.Operation == OperationUpdate {
 		msg.Type = MsgApp
 	}
-	if opera.Operation == "READ" {
+	if operation.Operation == OperationGet {
 		msg.Type = MsgReadIndex
 	}
 	n.MsgChan <- msg
-	resp := "NODATA"
+	var respMsg RaftOperation
 	httpTimeoutTicker := time.NewTicker(20 * time.Second)
 forLoop:
 	for {
 		select {
-		case msg := <-n.HttpChan:
-			resp = string(msg.Data)
-			fmt.Println("recv requestKey", resp)
+		case respMsg = <-n.HttpChan:
 			break forLoop
 		case <-httpTimeoutTicker.C:
 			break forLoop
 		}
 	}
-
-	w.Write([]byte(resp))
+	marshal, _ := json.Marshal(respMsg)
+	w.Write(marshal)
 }
 
 // 用于raft节点之间通信的api
@@ -181,7 +180,6 @@ func (n *Node) MsgSender(msg Msg) {
 	reader := bytes.NewReader(msgReader)
 	_, err := cli.Post("http://localhost:"+msg.To+"/message", "", reader)
 	if err != nil {
-		// TODO bug
 		if _, isOK := n.OtherNode[msg.To]; isOK {
 			delete(n.OtherNode, msg.To)
 		}
@@ -301,7 +299,10 @@ func (n *Node) MsgHandler(msg Msg) {
 			acks := len(status.Acks)
 			if acks > 1+(len(n.OtherNode))/2 && status.State == false {
 				fmt.Println("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
-				n.HttpChan <- msg
+				operation := RaftOperation{
+					Value: status.TempValue,
+				}
+				n.HttpChan <- operation
 				status.State = true
 			}
 		}
@@ -314,11 +315,22 @@ func (n *Node) MsgHandler(msg Msg) {
 			e := Entry{
 				Term:  term,
 				Index: index + 1,
+				Data:  msg.Data,
 			}
+			operation := RaftOperation{}
+			json.Unmarshal(msg.Data, &operation)
+			if operation.Operation == OperationAdd {
+				n.AddValue(operation.Key, operation.Value)
+			}
+			if operation.Operation == OperationUpdate {
+				n.UpdateValue(operation.Key, operation.Value)
+			}
+
 			n.Log.AppendEntry(e.Term, e.Index, e)
-			n.Read.AddRequest(string(e.Index), n.Log.Committed)
+			n.Read.AddRequest(string(e.Index), n.Log.Committed, operation.Value)
 			n.Read.RecvAck(string(e.Index), n.Port)
 			fmt.Println("=== leader log ", n.Log)
+			fmt.Println("=== leader map ", n.Map)
 			bytes, err := json.Marshal(e)
 			if err != nil {
 				fmt.Println("marshal entry error", e)
@@ -333,8 +345,19 @@ func (n *Node) MsgHandler(msg Msg) {
 		} else {
 			e := Entry{}
 			json.Unmarshal(msg.Data, &e)
+
+			// 写入MAP中
+			operation := RaftOperation{}
+			json.Unmarshal(e.Data, &operation)
+			if operation.Operation == OperationAdd {
+				n.AddValue(operation.Key, operation.Value)
+			}
+			if operation.Operation == OperationUpdate {
+				n.UpdateValue(operation.Key, operation.Value)
+			}
 			isOk, t, i2 := n.Log.AppendEntry(e.Term, e.Index, e)
 			fmt.Println("=== follower log ", n.Log)
+			fmt.Println("=== follower map ", n.Map)
 			fmt.Println(n.Port + " rcv App as follower")
 			broadCastMsgAppResp := Msg{
 				Type:   MsgAppResp,
@@ -357,7 +380,10 @@ func (n *Node) MsgHandler(msg Msg) {
 		acks := len(status.Acks)
 		if acks > 1+(len(n.OtherNode))/2 && status.State == false {
 			fmt.Println("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
-			n.HttpChan <- msg
+			operation := RaftOperation{
+				Value: status.TempValue,
+			}
+			n.HttpChan <- operation
 			status.State = true
 		}
 	case MsgAskVote:
@@ -390,8 +416,19 @@ func (n *Node) MsgHandler(msg Msg) {
 		break
 	case MsgReadIndex:
 		if n.State == StateLeader {
-			requestKey := string(msg.Data)
-			n.Read.AddRequest(requestKey, n.Log.Committed)
+			operation := RaftOperation{}
+			if e := json.Unmarshal(msg.Data, &operation); e != nil {
+				fmt.Println("unmarshal error", e)
+			}
+			requestKey := n.Port +
+				strconv.Itoa(time.Now().Hour()) +
+				strconv.Itoa(time.Now().Minute()) +
+				strconv.Itoa(time.Now().Second())
+			value, err := n.GetValue(operation.Key)
+			if err != nil {
+				break
+			}
+			n.Read.AddRequest(requestKey, n.Log.Committed, value)
 			n.Read.RecvAck(requestKey, n.Port)
 			msg := Msg{
 				Type:  MsgHeartbeat,

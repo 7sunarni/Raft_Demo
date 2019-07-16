@@ -8,17 +8,20 @@ type ReadOnly struct {
 type ReadIndexStatus struct {
 	Acks      map[string]interface{} // ack的key是server的ip port信息
 	Committed int64                  // 表示某个请求时候的committed值
-	State     bool                   //是否已经响应过
+	State     bool                   // 是否已经响应过
+	TempValue int64                  // 请求时候的value值
 }
 
-func (r *ReadOnly) AddRequest(requestKey string, committed int64) {
+func (r *ReadOnly) AddRequest(requestKey string, committed int64, tempValue int64) {
 	if _, ok := r.ReadOnlyMap[requestKey]; ok {
 		return
 	}
 	r.ReadOnlyQueue = append(r.ReadOnlyQueue, requestKey)
 	r.ReadOnlyMap[requestKey] = &ReadIndexStatus{
 		Committed: committed,
-		Acks:      make(map[string]interface{})}
+		Acks:      make(map[string]interface{}),
+		TempValue: tempValue,
+	}
 }
 
 // 收到端口的数据
