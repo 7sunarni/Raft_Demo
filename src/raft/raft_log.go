@@ -1,5 +1,10 @@
 package raft
 
+const (
+	InitTerm  = -1
+	InitIndex = -1
+)
+
 // RaftLog中的持久化储存和不稳定储存
 type LogStorage interface {
 	FirstIndex() int64      // 获取第一条索引
@@ -22,7 +27,8 @@ type RaftLog struct {
 //  - 失败 返回 false，当前Log最大的Term和当前Log最大的Term
 func (r *RaftLog) AppendEntry(term, index int64, entries ...Entry) (isOk bool, t int64, i int64) {
 	lastTerm, lastIndex := r.LastIndexAndTerm()
-	if lastIndex >= index {
+	// 修复bug，添加的entry的index只能是当前index的下一个
+	if lastIndex != index-1 {
 		return false, lastTerm, lastIndex
 	}
 	isMatch, err := r.MatchTerm(term, index)
@@ -41,16 +47,6 @@ func (r *RaftLog) AppendSnapshot(term, index int64, snapshot Snapshot) {
 }
 
 func (r *RaftLog) MatchTerm(term, index int64) (isMatch bool, err error) {
-	//var firstIndex int64
-	//var lastIndex int64
-	//if firstIndex = r.Stable.FirstIndex(); firstIndex == 0 {
-	//	firstIndex = r.Unstable.FirstIndex()
-	//}
-	//
-	//if lastIndex = r.Unstable.LastIndex(); lastIndex == 0 {
-	//	lastIndex = r.Stable.LastIndex()
-	//}
-
 	t := r.Term(index - 1)
 	if t == term || t == term-1 {
 		return true, nil

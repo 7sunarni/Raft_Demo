@@ -16,6 +16,7 @@ const (
 	1.3 entry的index比之前的小，
 	1.4 entry的index和之前相同
 	1.5 entry的index比之前的大
+	1.6 entry的index比之前的大很多
 
 2. 向stable中添加数据，然后向unstable中添加数据
 	2.1 添加后向unstable中写入正常的数据
@@ -165,6 +166,22 @@ func TestWithStable(t *testing.T) {
 		if term != 0 && index != 10 {
 			t.Fatal("append error", term, index)
 		}
+	}
+
+}
+
+func TestMoreIndex(t *testing.T) {
+	log := NewLog()
+	term, index := log.LastIndexAndTerm()
+	entry := Entry{
+		Term:  term,
+		Index: index + 10,
+	}
+	log.AppendEntry(entry.Term, entry.Index, entry)
+
+	checkTerm, checkIndex := log.LastIndexAndTerm()
+	if checkIndex != index {
+		t.Fatal("cross append", checkTerm, index)
 	}
 
 }

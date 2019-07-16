@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -11,7 +12,6 @@ const (
 	Error = iota
 )
 
-// TODO  在里面用fmt来打印对象
 func NewRaftDebugLog() *RaftDebugLog {
 	// TODO 加锁
 	return &RaftDebugLog{
@@ -30,30 +30,31 @@ type LogItem struct {
 	TimeStamp int64
 }
 
-func (r *RaftDebugLog) Info(s string) {
+func (r *RaftDebugLog) Info(a interface{}) {
 	item := LogItem{
 		Type:      Info,
 		TimeStamp: time.Now().Unix(),
-		Value:     s,
+		Value:     fmt.Sprint(a),
 	}
+	fmt.Println()
 	r.Items = append(r.Items, item)
 
 }
 
-func (r *RaftDebugLog) Warn(s string) {
+func (r *RaftDebugLog) Warn(a interface{}) {
 	item := LogItem{
 		Type:      Warn,
 		TimeStamp: time.Now().Unix(),
-		Value:     s,
+		Value:     fmt.Sprint(a),
 	}
 	r.Items = append(r.Items, item)
 }
 
-func (r *RaftDebugLog) Error(s string) {
+func (r *RaftDebugLog) Error(a interface{}) {
 	item := LogItem{
 		Type:      Error,
 		TimeStamp: time.Now().Unix(),
-		Value:     s,
+		Value:     fmt.Sprint(a),
 	}
 	r.Items = append(r.Items, item)
 }

@@ -45,8 +45,11 @@ func (r *ReadOnly) RemoveOne(requestKey string) {
 	if !ok {
 		// TODO 错误
 	}
-	delete(r.ReadOnlyMap,requestKey)
+	delete(r.ReadOnlyMap, requestKey)
 	// TODO 将queue里面的数据清除
 }
 
-// 削减操作
+// 移除一系列的数据
+func (r *ReadOnly) RemoveList(requestKey string) {
+
+}

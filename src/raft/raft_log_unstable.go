@@ -44,8 +44,6 @@ func (u *UnstableLog) AppendEntry(entries ...Entry) {
 	u.Offset += int64(len(entries))
 }
 
-// Snapshot中的Data包括了全部的entry？
-// TODO：判断是否能够添加成功
 // append snapshot的时候增加判断是否能够append
 func (u *UnstableLog) AppendSnapshot(snapshot Snapshot) {
 	u.Snapshot = &snapshot
@@ -58,6 +56,7 @@ func (u *UnstableLog) ShrinkEntry(index int64) bool {
 	for i, e := range u.Entries {
 		if e.Index == index {
 			pos = i
+			break
 		}
 	}
 	if pos != -1 {
