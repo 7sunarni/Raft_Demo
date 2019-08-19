@@ -38,7 +38,6 @@ func (r *RaftDebugLog) Trace(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
-	fmt.Println()
 	r.Items = append(r.Items, item)
 
 }
@@ -49,7 +48,6 @@ func (r *RaftDebugLog) Info(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
-	fmt.Println()
 	r.Items = append(r.Items, item)
 
 }
@@ -83,6 +81,8 @@ func (r *RaftDebugLog) Fatal(a ...interface{}) {
 
 // 把日志读取到出来返回给前端展示
 func (r *RaftDebugLog) GetLogs() []LogItem {
+	r.LogMutex.Lock()
+	defer r.LogMutex.Unlock()
 	items := r.Items
 	r.Items = []LogItem{}
 	return items

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"time"
@@ -28,8 +29,8 @@ const (
 	2. add Debug module
 	3. lock for thread safe
 	4. election timeout
-	5. cpu occupancy
-	6. web front-end show
+	5. cpu occupancy -> Linux 上解决
+	6. web front-end show -> WebAssembly
 */
 type Node struct {
 	Type int
@@ -93,7 +94,6 @@ func (n *Node) SetNodes(nodes []string) {
 		//	Type:   ProgressUnknown,
 		//}
 	}
-
 }
 
 func (n *Node) SetState(state int64) {
@@ -114,7 +114,6 @@ func (n *Node) Start() {
 	duration := time.Duration(TestHeartBeatTimeout + rand.Int63n(5))
 	n.HeartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
 	go n.Monitor()
-	 
 	n.RaftDebugLog.Warn(n.Port + " start")
 	http.HandleFunc("/message", msgHandler)
 	http.HandleFunc("/raft", raftHandler)
@@ -128,6 +127,11 @@ func debugHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")             //允许访问所有域
 	w.Header().Add("Access-Control-Allow-Headers", "Content-Type") //header的类型
 	w.Header().Set("content-type", "application/json")             //返回数据格式是json
+	data, _ := ioutil.ReadAll(r.Body)
+	if len(data) != 0 {
+		w.Write(nil)
+		os.Exit(1)
+	}
 	logs := n.RaftDebugLog.GetLogs()
 	marshal, _ := json.Marshal(logs)
 	w.Write(marshal)
@@ -186,7 +190,6 @@ func msgHandler(w http.ResponseWriter, r *http.Request) {
 		n.RaftDebugLog.Error("unmarshal error", e)
 	}
 	if msg.Type == MsgVoteResp {
-		 
 		n.RaftDebugLog.Error("recv vote resp", msg)
 	}
 	n.MsgChan <- msg
@@ -199,7 +202,6 @@ func (n *Node) MsgSender(msg Msg) {
 			n.RaftDebugLog.Fatal("msg sender recover error", e)
 		}
 	}()
-	 
 	n.RaftDebugLog.Trace("send msg", msg.Type, msg.To)
 	// TODO 不用修改为全局的HttpClient，后期会改为gRPC方式用于节点间通信
 	cli := http.Client{}
@@ -221,7 +223,6 @@ func (n *Node) MsgSender(msg Msg) {
 func (n *Node) Monitor() {
 	defer func() {
 		if e := recover(); e != nil {
-			 
 			n.RaftDebugLog.Error("monitor recover err: ", e)
 			debug.PrintStack()
 		}
@@ -232,11 +233,6 @@ func (n *Node) Monitor() {
 			if n.HeartBeatTimeoutTicker != nil {
 				n.HeartBeatTimeoutTicker.Stop()
 			}
-			//{
-			//	fmt.Printf("=== timeoutTicker chan  %v \n", c, )
-			//	fmt.Printf("=== timeoutTicker ticker %v \n", n.HeartBeatTimeoutTicker)
-			//	 
-			//}
 			if n.State == StateFollower {
 				n.RaftDebugLog.Info("heartbeat time out, start new election term")
 				n.startElection(false)
@@ -286,11 +282,6 @@ func (n *Node) MsgHandler(msg Msg) {
 		rand.Seed(time.Now().UnixNano())
 		duration := time.Duration(TestHeartBeatTimeout + rand.Int63n(5))
 		n.HeartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
-		//{
-		//	fmt.Printf("=== update hb ticker %v \n", n.HeartBeatTimeoutTicker)
-		//	fmt.Printf("=== update hb ticker duration %v \n", duration)
-		//	fmt.Printf("=== update hb ticker now  %v \n", time.Now())
-		//}
 		if n.State != StateLeader {
 			// 这里是否拒绝
 			committed := msg.Index
@@ -322,10 +313,12 @@ func (n *Node) MsgHandler(msg Msg) {
 			// 心跳返回正确后，更新readonly的数据
 			n.RaftDebugLog.Info("leader get read index heart beat resp")
 			n.Read.RecvAck(string(msg.Data), msg.From)
-			status := n.Read.ReadOnlyMap[string(msg.Data)]
+			//status := n.Read.ReadOnlyMap[string(msg.Data)]
+			status := n.Read.NewReadOnlyMap[string(msg.Data)].(ReadIndexStatus)
 			acks := len(status.Acks)
 			// TODO 改为统一的方法检查是否满足多数节点满足的情况
-			if acks > 1+(len(n.OtherNode))/2 && status.State == false {
+			if n.checkQuorum(n.Read.NewReadOnlyMap) && status.State == false {
+				//if acks > 1+(len(n.OtherNode))/2 && status.State == false {
 				n.RaftDebugLog.Warn("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
 				operation := RaftOperation{
 					Value: status.TempValue,
@@ -336,7 +329,6 @@ func (n *Node) MsgHandler(msg Msg) {
 		}
 		break
 	case MsgApp:
-		 
 		n.RaftDebugLog.Trace("rcv MsgApp")
 		if n.State == StateLeader {
 			term, index := n.Log.LastIndexAndTerm()
@@ -401,9 +393,11 @@ func (n *Node) MsgHandler(msg Msg) {
 		}
 	case MsgAppResp:
 		n.Read.RecvAck(string(msg.Index), msg.From)
-		status := n.Read.ReadOnlyMap[string(msg.Index)]
+		//status := n.Read.ReadOnlyMap[string(msg.Index)]
+		status := n.Read.NewReadOnlyMap[string(msg.Index)].(ReadIndexStatus)
 		acks := len(status.Acks)
-		if acks > 1+(len(n.OtherNode))/2 && status.State == false {
+		if n.checkQuorum(n.Read.NewReadOnlyMap) && status.State == false {
+			//if acks > 1+(len(n.OtherNode))/2 && status.State == false {
 			n.RaftDebugLog.Warn("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
 			operation := RaftOperation{
 				Value: status.TempValue,
@@ -517,7 +511,7 @@ func (n *Node) becomeLeader() {
 		return
 	}
 	n.State = StateLeader
-	n.RaftDebugLog.Warn(fmt.Sprintf("===== %v become leader ===", n.Port))
+	n.RaftDebugLog.Warn(fmt.Sprintf("===== %v become leader =====", n.Port))
 	go n.heartBeatTicker()
 }
 

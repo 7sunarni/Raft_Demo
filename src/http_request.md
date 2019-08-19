@@ -12,5 +12,5 @@ curl 'http://localhost:9001/raft' -X POST --data '{"Operation":"ADD","Key":"apdo
 
 **3. debug的api，用于读取日志信息**
 ``` shell
-
+curl 'http://localhost:PORT/debug'
 ```
