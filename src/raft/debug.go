@@ -7,9 +7,11 @@ import (
 )
 
 const (
-	Info  = iota
-	Warn  = iota
-	Error = iota
+	Trace = iota
+	Info
+	Warn
+	Error
+	Fatal
 )
 
 func NewRaftDebugLog() *RaftDebugLog {
@@ -30,10 +32,10 @@ type LogItem struct {
 	TimeStamp int64
 }
 
-func (r *RaftDebugLog) Info(a interface{}) {
+func (r *RaftDebugLog) Trace(a ...interface{}) {
 	item := LogItem{
-		Type:      Info,
-		TimeStamp: time.Now().Unix(),
+		Type:      Trace,
+		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
 	fmt.Println()
@@ -41,19 +43,39 @@ func (r *RaftDebugLog) Info(a interface{}) {
 
 }
 
-func (r *RaftDebugLog) Warn(a interface{}) {
+func (r *RaftDebugLog) Info(a ...interface{}) {
+	item := LogItem{
+		Type:      Info,
+		TimeStamp: time.Now().Unix() * 1000,
+		Value:     fmt.Sprint(a),
+	}
+	fmt.Println()
+	r.Items = append(r.Items, item)
+
+}
+
+func (r *RaftDebugLog) Warn(a ...interface{}) {
 	item := LogItem{
 		Type:      Warn,
-		TimeStamp: time.Now().Unix(),
+		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
 	r.Items = append(r.Items, item)
 }
 
-func (r *RaftDebugLog) Error(a interface{}) {
+func (r *RaftDebugLog) Error(a ...interface{}) {
 	item := LogItem{
 		Type:      Error,
-		TimeStamp: time.Now().Unix(),
+		TimeStamp: time.Now().Unix() * 1000,
+		Value:     fmt.Sprint(a),
+	}
+	r.Items = append(r.Items, item)
+}
+
+func (r *RaftDebugLog) Fatal(a ...interface{}) {
+	item := LogItem{
+		Type:      Fatal,
+		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
 	r.Items = append(r.Items, item)

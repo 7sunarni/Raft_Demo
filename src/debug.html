@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html style="height:100%">
+<head>
+    <title>RAFT_DEMO_DEBUG</title>
+    <style type="text/css">
+        .input {
+            height: 100%;
+            width: 20%;
+            overflow-y: auto;
+            display: inline-block;
+            font-size: 12px;
+        }
+
+        /* pre-wrap 换行 */
+        .info {
+            white-space: pre-wrap;
+        }
+
+        /* trace */
+        .info0 {
+            font-size: 12px;
+            color: black;
+        }
+
+        /* info */
+        .info1 {
+            font-size: 12px;
+            color: #44804d;
+        }
+
+        /* warn */
+        .info2 {
+            font-size: 12px;
+            color: #ff850e;
+        }
+
+        /* error */
+        .info3 {
+            font-size: 12px;
+            color: #ff1e1e;
+        }
+
+        /* fatal */
+        .info4 {
+            font-size: 12px;
+            color: #303cff;
+        }
+
+    </style>
+</head>
+<body style="height:100%; font-size: 0; padding:0; margin:0">
+<div style="height: 80%">
+    <div id='port9001' class="input">
+    </div>
+
+    <div id='port9002' class="input">
+
+    </div>
+
+    <div id='port9003' class="input">
+
+    </div>
+
+    <div id='port9004' class="input">
+
+    </div>
+
+    <div id='port9005' class="input">
+
+    </div>
+</div>
+<div>
+    <button id="stop" onclick="stopInterval()"> STOP INTERVAL</button>
+</div>
+</body>
+<script type="text/javascript">
+    'use strict'
+
+    const CONSOLE_LEVEL = 1;
+
+    let ports = ["9001", "9002", "9003", "9004", "9005"];
+
+    // 标签对应的控制台
+    let csls = [];
+
+    // ajax轮询变量
+    let intervals = [];
+
+    for (let i = 0; i < ports.length; i++) {
+        // 获取端口
+        let port = ports[i];
+
+        // 首先获取每个标签
+        let csl = document.getElementById("port" + port);
+        csls[i] = csl;
+
+        // 设置ajax轮询
+        let interval = setInterval(function () {
+            let ajax = new XMLHttpRequest();
+            ajax.open('GET', 'http://localhost:' + port + '/debug');
+            ajax.onreadystatechange = function () {
+                // TODO 一个接口这里会调用两次？
+                if (this.responseText === '') {
+                    return;
+                }
+                let list = JSON.parse(this.responseText);
+                if (list.length === 0) {
+                    return;
+                }
+                for (let index = 0; index < list.length; index++) {
+                    let item = item2div(list[index])
+                    if (item !== undefined) {
+                        csl.innerHTML += item2div(list[index])
+                    }
+                }
+                // 滚动至最新的信息
+                csl.scrollTop = csl.scrollHeight
+            }
+            ajax.send();
+        }, 500);
+
+        intervals[i] = interval
+    }
+
+    function item2div(item) {
+        let level = item.Type;
+        if (level < CONSOLE_LEVEL) {
+            return;
+        }
+        let rawDate = new Date(item.TimeStamp);
+        let date = rawDate.getMinutes() + ':' + rawDate.getSeconds();
+        // 根据返回值类型组合标签
+        let blockItem = '<pre class="info' + level + '">' + date + ":  " + item.Value + '</pre>'
+        return blockItem;
+    }
+
+    function stopInterval() {
+        for (let i = 0; i < intervals.length; i++) {
+            clearInterval(intervals[i]);
+        }
+    }
+</script>
+</html>

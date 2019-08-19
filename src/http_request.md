@@ -4,6 +4,7 @@
 ``` shell
 curl 'http://localhost:9001/raft' -X POST --data '{"Operation":"GET","Key":"key"}'
 ```
+
 **2. 写的api，用于存放数据**
 ``` shell
 curl 'http://localhost:9001/raft' -X POST --data '{"Operation":"ADD","Key":"apdo","Value":100}'
