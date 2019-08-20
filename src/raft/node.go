@@ -32,8 +32,15 @@ TODO
 	4. election timeout
 	5. cpu occupancy -> Linux 上解决
 	6. web front-end show -> WebAssembly
+
 FIXME BUG
-	1. 前端日志会出现两次？
+	1. 前端日志会出现两次
+		-> Fixed 原生Ajax需要判断状态
+		``` JavaScript
+		if (ajax.readyState !== 4 || ajax.status !== 200) {
+                    return;
+		}
+		```
 */
 type Node struct {
 	Type int
