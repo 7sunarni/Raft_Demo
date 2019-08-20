@@ -24,7 +24,7 @@ const (
 	ProgressReplicate
 )
 
-//type Progress struct {
+//type progress struct {
 //	Node map[string]ProgressState
 //}
 

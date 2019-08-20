@@ -26,7 +26,7 @@ func (r *ReadOnly) AddRequest(requestKey string, committed int64, tempValue int6
 	//	Acks:      make(map[string]interface{}),
 	//	TempValue: tempValue,
 	//}
-	r.NewReadOnlyMap[requestKey] = &ReadIndexStatus{
+	r.NewReadOnlyMap[requestKey] = ReadIndexStatus{
 		Committed: committed,
 		Acks:      make(map[string]interface{}),
 		TempValue: tempValue,
@@ -42,7 +42,7 @@ func (r *ReadOnly) RecvAck(requestKey string, port string) {
 		return
 	}
 	//r.ReadOnlyMap[requestKey].Acks[port] = true
-	status := r.NewReadOnlyMap[requestKey].(ReadIndexStatus)
+	status := (r.NewReadOnlyMap[requestKey]).(ReadIndexStatus)
 	status.Acks[port] = true
 	r.NewReadOnlyMap[requestKey] = status
 }
@@ -50,10 +50,11 @@ func (r *ReadOnly) RecvAck(requestKey string, port string) {
 func NewReadOnly() *ReadOnly {
 	q := make([]string, 0, 0)
 	m := make(map[string]*ReadIndexStatus)
+	newMap := make(map[string]interface{})
 	r := ReadOnly{
 		ReadOnlyMap:    m,
 		ReadOnlyQueue:  q,
-		NewReadOnlyMap: nil,
+		NewReadOnlyMap: newMap,
 	}
 	return &r
 }

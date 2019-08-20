@@ -24,13 +24,16 @@ const (
 )
 
 /**
-# Raft-Demo TODO
-	1. change to Progress
-	2. add Debug module
+# Raft-Demo
+TODO
+	1. change to progress
+	2. add Debug module -> OK
 	3. lock for thread safe
 	4. election timeout
 	5. cpu occupancy -> Linux 上解决
 	6. web front-end show -> WebAssembly
+FIXME BUG
+	1. 前端日志会出现两次？
 */
 type Node struct {
 	Type int
@@ -42,12 +45,12 @@ type Node struct {
 
 	OtherNode map[string]interface{} // 其他小伙伴的port
 
-	Progress map[string]ProgressState // 站在Leader视角下的Follower的状态
+	progress map[string]ProgressState // 站在Leader视角下的Follower的状态
 
 	DataIndex int64
-	MsgChan   chan Msg
+	msgChan   chan Msg
 
-	HttpChan chan RaftOperation
+	httpChan chan RaftOperation
 
 	// 心跳超时
 	HeartBeatTimeoutTicker *time.Ticker
@@ -80,7 +83,7 @@ func NewNode(port string) *Node {
 		OtherNode: make(map[string]interface{}),
 		Log:       raftLog,
 		Quorum:    make(map[int64]map[string]interface{}),
-		Progress:  make(map[string]ProgressState),
+		progress:  make(map[string]ProgressState),
 		ValueMap:  NewValueMap(),
 	}
 	return n
@@ -89,7 +92,7 @@ func NewNode(port string) *Node {
 func (n *Node) SetNodes(nodes []string) {
 	for _, v := range nodes {
 		n.OtherNode[v] = v
-		//n.Progress.Node[v] = ProgressState{
+		//n.progress.Node[v] = ProgressState{
 		//	Active: false,
 		//	Type:   ProgressUnknown,
 		//}
@@ -106,8 +109,8 @@ func (n *Node) Start() {
 		n.SetState(StateCandidate)
 		go n.becomeLeader()
 	}
-	n.MsgChan = make(chan Msg, 10)
-	n.HttpChan = make(chan RaftOperation, 10)
+	n.msgChan = make(chan Msg, 10)
+	n.httpChan = make(chan RaftOperation, 10)
 	n.Read = NewReadOnly()
 	rand.Seed(time.Now().UnixNano())
 	// 移动位置，避免出现空指针问题
@@ -163,13 +166,15 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 	if operation.Operation == OperationGet {
 		msg.Type = MsgReadIndex
 	}
-	n.MsgChan <- msg
+	n.RaftDebugLog.Info("Leader rcv operation")
+	n.RaftDebugLog.Info(msg)
+	n.msgChan <- msg
 	var respMsg RaftOperation
 	httpTimeoutTicker := time.NewTicker(20 * time.Second)
 forLoop:
 	for {
 		select {
-		case respMsg = <-n.HttpChan:
+		case respMsg = <-n.httpChan:
 			break forLoop
 		case <-httpTimeoutTicker.C:
 			break forLoop
@@ -192,7 +197,7 @@ func msgHandler(w http.ResponseWriter, r *http.Request) {
 	if msg.Type == MsgVoteResp {
 		n.RaftDebugLog.Error("recv vote resp", msg)
 	}
-	n.MsgChan <- msg
+	n.msgChan <- msg
 	w.Write(nil)
 }
 
@@ -237,7 +242,7 @@ func (n *Node) Monitor() {
 				n.RaftDebugLog.Info("heartbeat time out, start new election term")
 				n.startElection(false)
 			}
-		case msg := <-n.MsgChan:
+		case msg := <-n.msgChan:
 			n.MsgHandler(msg)
 		}
 	}
@@ -270,7 +275,7 @@ func (n *Node) startElection(voted bool) {
 func (n *Node) MsgHandler(msg Msg) {
 	defer func() {
 		if e := recover(); e != nil {
-			n.RaftDebugLog.Error("heartbeat time out, start new election term")
+			n.RaftDebugLog.Error("msg handler recover", e)
 			debug.PrintStack()
 		}
 	}()
@@ -293,9 +298,9 @@ func (n *Node) MsgHandler(msg Msg) {
 				var otherNode map[string]interface{}
 				json.Unmarshal(msg.Data, &otherNode)
 				n.OtherNode = otherNode
-				//var p Progress
+				//var p progress
 				//json.Unmarshal(msg.Data, &p)
-				//n.Progress = p
+				//n.progress = p
 			}
 			msg.Type = MsgHeartBeatResp
 			temp := msg.From
@@ -316,21 +321,20 @@ func (n *Node) MsgHandler(msg Msg) {
 			//status := n.Read.ReadOnlyMap[string(msg.Data)]
 			status := n.Read.NewReadOnlyMap[string(msg.Data)].(ReadIndexStatus)
 			acks := len(status.Acks)
-			// TODO 改为统一的方法检查是否满足多数节点满足的情况
 			if n.checkQuorum(n.Read.NewReadOnlyMap) && status.State == false {
 				//if acks > 1+(len(n.OtherNode))/2 && status.State == false {
 				n.RaftDebugLog.Warn("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
 				operation := RaftOperation{
 					Value: status.TempValue,
 				}
-				n.HttpChan <- operation
+				n.httpChan <- operation
 				status.State = true
 			}
 		}
 		break
 	case MsgApp:
-		n.RaftDebugLog.Trace("rcv MsgApp")
 		if n.State == StateLeader {
+			n.RaftDebugLog.Info("leader rcv MsgApp")
 			term, index := n.Log.LastIndexAndTerm()
 			// Leader添加肯定会成功
 			e := Entry{
@@ -351,7 +355,7 @@ func (n *Node) MsgHandler(msg Msg) {
 			n.Read.AddRequest(string(e.Index), n.Log.Committed, operation.Value)
 			n.Read.RecvAck(string(e.Index), n.Port)
 			n.RaftDebugLog.Trace("=== leader log ", n.Log)
-			n.RaftDebugLog.Trace("=== leader map ", n.Map)
+			n.RaftDebugLog.Info("=== leader map ", n.Map)
 			bytesData, err := json.Marshal(e)
 			if err != nil {
 				n.RaftDebugLog.Error("marshal entry error", e)
@@ -364,9 +368,9 @@ func (n *Node) MsgHandler(msg Msg) {
 			}
 			n.visit(broadCastMsgApp)
 		} else {
+			n.RaftDebugLog.Info("follower rcv MsgApp")
 			e := Entry{}
 			json.Unmarshal(msg.Data, &e)
-
 			// 写入map中
 			operation := RaftOperation{}
 			json.Unmarshal(e.Data, &operation)
@@ -377,9 +381,9 @@ func (n *Node) MsgHandler(msg Msg) {
 				n.UpdateValue(operation.Key, operation.Value)
 			}
 			isOk, t, i2 := n.Log.AppendEntry(e.Term, e.Index, e)
-			n.RaftDebugLog.Trace("=== follower log ", n.Log)
-			n.RaftDebugLog.Trace("=== follower map ", n.Map)
-			n.RaftDebugLog.Trace(n.Port + " rcv App as follower")
+			n.RaftDebugLog.Info("=== follower log ", n.Log)
+			n.RaftDebugLog.Info("=== follower map ", n.Map)
+			n.RaftDebugLog.Info(n.Port + " rcv App as follower")
 			broadCastMsgAppResp := Msg{
 				Type:   MsgAppResp,
 				From:   n.Port,
@@ -392,17 +396,21 @@ func (n *Node) MsgHandler(msg Msg) {
 			go n.MsgSender(broadCastMsgAppResp)
 		}
 	case MsgAppResp:
+		n.RaftDebugLog.Info("leader rcv AppResp", msg.From)
+		n.RaftDebugLog.Info("before ack", n.Read.NewReadOnlyMap)
 		n.Read.RecvAck(string(msg.Index), msg.From)
+		n.RaftDebugLog.Info("after ack", n.Read.NewReadOnlyMap)
 		//status := n.Read.ReadOnlyMap[string(msg.Index)]
-		status := n.Read.NewReadOnlyMap[string(msg.Index)].(ReadIndexStatus)
+		status := (n.Read.NewReadOnlyMap[string(msg.Index)]).(ReadIndexStatus)
+		n.RaftDebugLog.Info(n.Read.NewReadOnlyMap)
 		acks := len(status.Acks)
-		if n.checkQuorum(n.Read.NewReadOnlyMap) && status.State == false {
+		if n.checkQuorum(status.Acks) && status.State == false {
 			//if acks > 1+(len(n.OtherNode))/2 && status.State == false {
 			n.RaftDebugLog.Warn("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
 			operation := RaftOperation{
 				Value: status.TempValue,
 			}
-			n.HttpChan <- operation
+			n.httpChan <- operation
 			status.State = true
 		}
 	case MsgAskVote:
@@ -481,7 +489,7 @@ func (n *Node) heartBeatTicker() {
 		select {
 		case <-heartBeat.C:
 			d := n.OtherNode
-			//d := n.Progress
+			//d := n.progress
 			data, e := json.Marshal(d)
 			if e != nil {
 				n.RaftDebugLog.Error("data error")
@@ -530,7 +538,7 @@ func (n *Node) visit(msg Msg) {
 		go n.MsgSender(msg)
 	}
 	// 更新操作
-	//for item := range n.Progress.Node {
+	//for item := range n.progress.Node {
 	//	if item == n.Port {
 	//		continue
 	//	}
