@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -23,25 +24,6 @@ const (
 	TestHeartBeatTimeout = TestHeartBeat + 10
 )
 
-/**
-# Raft-Demo
-TODO
-	1. change to progress
-	2. add Debug module -> OK
-	3. lock for thread safe
-	4. election timeout
-	5. cpu occupancy -> Linux 上解决
-	6. web front-end show -> WebAssembly
-
-FIXME BUG
-	1. 前端日志会出现两次
-		-> Fixed 原生Ajax需要判断状态
-		``` JavaScript
-		if (ajax.readyState !== 4 || ajax.status !== 200) {
-                    return;
-		}
-		```
-*/
 type Node struct {
 	Type int
 
@@ -114,7 +96,7 @@ func (n *Node) Start() {
 	if n.State == StateLeader {
 		// 要先变为不是Leader状态才行，becomeLeader中有判断
 		n.SetState(StateCandidate)
-		go n.becomeLeader()
+		n.becomeLeader()
 	}
 	n.msgChan = make(chan Msg, 10)
 	n.httpChan = make(chan RaftOperation, 10)
@@ -276,7 +258,7 @@ func (n *Node) startElection(voted bool) {
 		Data: nil,
 		Term: n.Term,
 	}
-	n.visit(msg)
+	n.Visit(msg)
 }
 
 func (n *Node) MsgHandler(msg Msg) {
@@ -328,7 +310,7 @@ func (n *Node) MsgHandler(msg Msg) {
 			//status := n.Read.ReadOnlyMap[string(msg.Data)]
 			status := n.Read.NewReadOnlyMap[string(msg.Data)].(ReadIndexStatus)
 			acks := len(status.Acks)
-			if n.checkQuorum(n.Read.NewReadOnlyMap) && status.State == false {
+			if n.checkQuorum(status.Acks) && status.State == false {
 				//if acks > 1+(len(n.OtherNode))/2 && status.State == false {
 				n.RaftDebugLog.Warn("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
 				operation := RaftOperation{
@@ -373,7 +355,7 @@ func (n *Node) MsgHandler(msg Msg) {
 				From: n.Port,
 				Data: bytesData,
 			}
-			n.visit(broadCastMsgApp)
+			n.Visit(broadCastMsgApp)
 		} else {
 			n.RaftDebugLog.Info("follower rcv MsgApp")
 			e := Entry{}
@@ -407,12 +389,10 @@ func (n *Node) MsgHandler(msg Msg) {
 		n.RaftDebugLog.Info("before ack", n.Read.NewReadOnlyMap)
 		n.Read.RecvAck(string(msg.Index), msg.From)
 		n.RaftDebugLog.Info("after ack", n.Read.NewReadOnlyMap)
-		//status := n.Read.ReadOnlyMap[string(msg.Index)]
 		status := (n.Read.NewReadOnlyMap[string(msg.Index)]).(ReadIndexStatus)
 		n.RaftDebugLog.Info(n.Read.NewReadOnlyMap)
 		acks := len(status.Acks)
 		if n.checkQuorum(status.Acks) && status.State == false {
-			//if acks > 1+(len(n.OtherNode))/2 && status.State == false {
 			n.RaftDebugLog.Warn("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
 			operation := RaftOperation{
 				Value: status.TempValue,
@@ -472,7 +452,7 @@ func (n *Node) MsgHandler(msg Msg) {
 				Index: n.Log.Committed + 100,
 			}
 			n.RaftDebugLog.Trace("leader send read index heart beat")
-			n.visit(msg)
+			n.Visit(msg)
 		}
 		if n.Type == StateFollower {
 			// 转发给leader处理
@@ -507,7 +487,7 @@ func (n *Node) heartBeatTicker() {
 				Data: data,
 				Term: n.Term,
 			}
-			n.visit(msg)
+			n.Visit(msg)
 		}
 	}
 }
@@ -536,7 +516,7 @@ func (n *Node) changeLeader() {
 
 // visit函数用于向所有的节点发送一条消息，
 // 比如心跳、超时选举、更新entry等操作
-func (n *Node) visit(msg Msg) {
+func (n *Node) Visit(msg Msg) {
 	for p := range n.OtherNode {
 		if p == n.Port {
 			continue
