@@ -12,61 +12,54 @@
         }
 
         /* pre-wrap 换行 */
-        .info {
-            white-space: pre-wrap;
+        [class^='info'] {
+            /*white-space: pre-wrap;*/
+
         }
 
         /* trace */
         .info0 {
             font-size: 12px;
-            color: #0070BB;
+            color: #0000EE;
         }
 
         /* info */
         .info1 {
             font-size: 12px;
-            color: #48BB31;
+            color: #00CD00;
         }
 
         /* warn */
         .info2 {
             font-size: 12px;
-            color: #BBBB23;
+            color: #00CCCC;
         }
 
         /* error */
         .info3 {
             font-size: 12px;
-            color: #FF0006;
+            color: #CFBFAD;
         }
 
         /* fatal */
         .info4 {
             font-size: 12px;
-            color: #8F0005;
+            color: #FF007F;
         }
 
     </style>
 </head>
 <body style="height:100%; font-size: 0; padding:0; margin:0">
-<div style="height: 80%">
+<div style="height: 80%;background: #2B2B2B;">
     <div id='port9001' class="input">
     </div>
-
     <div id='port9002' class="input">
-
     </div>
-
     <div id='port9003' class="input">
-
     </div>
-
     <div id='port9004' class="input">
-
     </div>
-
     <div id='port9005' class="input">
-
     </div>
 </div>
 <div>
@@ -83,11 +76,13 @@
 
     const CONSOLE_LEVEL = 1;
 
+    const INTERVAL_TIME = 1000;
+
     // let ports = ["9001"];
     let ports = ["9001", "9002", "9003", "9004", "9005"];
 
     // 标签对应的控制台
-    let csls = [];
+    let consoles = [];
 
     // ajax轮询变量
     let intervals = [];
@@ -98,7 +93,7 @@
 
         // 首先获取每个标签
         let csl = document.getElementById("port" + port);
-        csls[i] = csl;
+        consoles[i] = csl;
 
         // 设置ajax轮询
         intervals[i] = setInterval(function () {
@@ -122,7 +117,7 @@
             };
             ajax.open('GET', 'http://localhost:' + port + '/debug');
             ajax.send();
-        }, 5000)
+        }, INTERVAL_TIME)
     }
 
     function item2div(item) {
@@ -176,7 +171,5 @@
         ajax.setRequestHeader('Content-Type', 'application/json');
         ajax.send('{"ACTION":"KILL"}');
     }
-
-
 </script>
 </html>

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"raft/httpAPICenter"
+	"raft/raftdebug"
 	"runtime/debug"
 	"strconv"
 	"time"
@@ -20,8 +22,8 @@ const (
 	StateLeader
 )
 const (
-	TestHeartBeat        = 5
-	TestHeartBeatTimeout = TestHeartBeat + 10
+	HeartBeat        = 5
+	HeartBeatTimeout = HeartBeat + 10
 )
 
 type Node struct {
@@ -30,7 +32,7 @@ type Node struct {
 	State int64
 	Term  int64
 
-	Quorum map[int64]map[string]interface{} // 用于检查是否满足投票条件
+	Quorum map[int64]map[string]interface{} // 用于检查是否满足投票条件。参数是周期，投票节点和投票结果
 
 	OtherNode map[string]interface{} // 其他小伙伴的port
 
@@ -39,13 +41,15 @@ type Node struct {
 	DataIndex int64
 	msgChan   chan Msg
 
-	httpChan chan RaftOperation
+	httpChan chan httpAPICenter.RaftOperation
+
+	//*httpAPICenter.HttpApi
 
 	// 心跳超时
-	HeartBeatTimeoutTicker *time.Ticker
+	heartBeatTimeoutTicker *time.Ticker
 
 	// 选举超时
-	ElectionTimeoutTicker time.Ticker
+	electionTimeoutTicker time.Ticker
 
 	Port string
 
@@ -54,7 +58,7 @@ type Node struct {
 	Read *ReadOnly
 
 	// debug日志，用于在前台展示
-	RaftDebugLog
+	*raftdebug.RaftDebugLog
 
 	// 存放k-v的封装集合
 	*ValueMap
@@ -78,6 +82,40 @@ func NewNode(port string) *Node {
 	return n
 }
 
+func (n *Node) Start() {
+	n.init()
+	if n.State == StateLeader {
+		// 要先变为不是Leader状态才行，becomeLeader中有判断
+		n.SetState(StateCandidate)
+		n.becomeLeader()
+	}
+	rand.Seed(time.Now().UnixNano())
+	// 移动位置，避免出现空指针问题
+	duration := time.Duration(HeartBeatTimeout + rand.Int63n(5))
+	n.heartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
+	go n.Monitor()
+	n.RaftDebugLog.Warn(n.Port + " start")
+	http.HandleFunc("/message", msgHandler)
+	http.HandleFunc("/raft", raftHandler)
+	http.HandleFunc("/debug", debugHandler)
+	http.ListenAndServe(":"+n.Port, nil)
+}
+
+func (n *Node) SetState(state int64) {
+	n.State = state
+}
+
+func (n *Node) init() {
+	n.RaftDebugLog = raftdebug.NewRaftDebugLog()
+	n.msgChan = make(chan Msg, 10)
+	n.httpChan = make(chan httpAPICenter.RaftOperation, 10)
+	//n.HttpApi = httpAPICenter.NewHttpApi()
+	//// api中的log和当前的log是同一个
+	//n.HttpApi.DebugLog = n.RaftDebugLog
+	//go n.HttpApi.Run()
+	n.Read = NewReadOnly()
+}
+
 func (n *Node) SetNodes(nodes []string) {
 	for _, v := range nodes {
 		n.OtherNode[v] = v
@@ -88,31 +126,6 @@ func (n *Node) SetNodes(nodes []string) {
 	}
 }
 
-func (n *Node) SetState(state int64) {
-	n.State = state
-}
-
-func (n *Node) Start() {
-	if n.State == StateLeader {
-		// 要先变为不是Leader状态才行，becomeLeader中有判断
-		n.SetState(StateCandidate)
-		n.becomeLeader()
-	}
-	n.msgChan = make(chan Msg, 10)
-	n.httpChan = make(chan RaftOperation, 10)
-	n.Read = NewReadOnly()
-	rand.Seed(time.Now().UnixNano())
-	// 移动位置，避免出现空指针问题
-	duration := time.Duration(TestHeartBeatTimeout + rand.Int63n(5))
-	n.HeartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
-	go n.Monitor()
-	n.RaftDebugLog.Warn(n.Port + " start")
-	http.HandleFunc("/message", msgHandler)
-	http.HandleFunc("/raft", raftHandler)
-	http.HandleFunc("/debug", debugHandler)
-	http.ListenAndServe(":"+n.Port, nil)
-}
-
 // 用于输出debug的信息
 func debugHandler(w http.ResponseWriter, r *http.Request) {
 	// debug模块允许跨域请求
@@ -121,7 +134,7 @@ func debugHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("content-type", "application/json")             //返回数据格式是json
 	data, _ := ioutil.ReadAll(r.Body)
 	if len(data) != 0 {
-		w.Write(nil)
+		w.Write([]byte("KILL"))
 		os.Exit(1)
 	}
 	logs := n.RaftDebugLog.GetLogs()
@@ -135,17 +148,22 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 	if e != nil {
 		n.RaftDebugLog.Error("raftHandler readAll error", e)
 	}
-	operation := RaftOperation{}
+	operation := httpAPICenter.RaftOperation{}
 	if e := json.Unmarshal(data, &operation); e != nil {
 		n.RaftDebugLog.Error("unmarshal error", e)
 	}
-
+	requestKey := n.Port +
+		strconv.Itoa(time.Now().Hour()) +
+		strconv.Itoa(time.Now().Minute()) +
+		strconv.Itoa(time.Now().Second())
+	operation.RequestKey = requestKey
+	// 生成requestKey之后返回到data里面去
+	data, _ = json.Marshal(operation)
 	msg := Msg{
 		From: n.Port,
 		To:   n.Port,
 		Data: data,
 	}
-
 	if operation.Operation == OperationAdd {
 		msg.Type = MsgApp
 	}
@@ -153,12 +171,12 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 		msg.Type = MsgApp
 	}
 	if operation.Operation == OperationGet {
-		msg.Type = MsgReadIndex
+		msg.Type = MsgApp
 	}
 	n.RaftDebugLog.Info("Leader rcv operation")
 	n.RaftDebugLog.Info(msg)
 	n.msgChan <- msg
-	var respMsg RaftOperation
+	var respMsg httpAPICenter.RaftOperation
 	httpTimeoutTicker := time.NewTicker(20 * time.Second)
 forLoop:
 	for {
@@ -169,8 +187,13 @@ forLoop:
 			break forLoop
 		}
 	}
-	marshal, _ := json.Marshal(respMsg)
-	w.Write(marshal)
+	n.RaftDebugLog.Info(requestKey, respMsg.RequestKey)
+	if requestKey == respMsg.RequestKey {
+		marshal, _ := json.Marshal(respMsg)
+		w.Write(marshal)
+	} else {
+		w.Write([]byte("TIMEOUT"))
+	}
 }
 
 // 用于raft节点之间通信的api
@@ -202,16 +225,15 @@ func (n *Node) MsgSender(msg Msg) {
 	msgReader, _ := json.Marshal(msg)
 	reader := bytes.NewReader(msgReader)
 	_, err := cli.Post("http://localhost:"+msg.To+"/message", "", reader)
-	if err != nil {
-		if _, isOK := n.OtherNode[msg.To]; isOK {
-			delete(n.OtherNode, msg.To)
-		}
-		//// 其他属性不变，active变成false
-		//n.Node[msg.To] = ProgressState{
-		//	Active: false,
-		//	Type:   n.Node[msg.To].Type,
-		//}
+
+	if _, isOK := n.OtherNode[msg.To]; isOK && err != nil {
+		delete(n.OtherNode, msg.To)
 	}
+	//// 其他属性不变，active变成false
+	//n.Node[msg.To] = ProgressState{
+	//	Active: false,
+	//	Type:   n.Node[msg.To].Type,
+	//}
 }
 
 func (n *Node) Monitor() {
@@ -223,9 +245,9 @@ func (n *Node) Monitor() {
 	}()
 	for {
 		select {
-		case <-n.HeartBeatTimeoutTicker.C:
-			if n.HeartBeatTimeoutTicker != nil {
-				n.HeartBeatTimeoutTicker.Stop()
+		case <-n.heartBeatTimeoutTicker.C:
+			if n.heartBeatTimeoutTicker != nil {
+				n.heartBeatTimeoutTicker.Stop()
 			}
 			if n.State == StateFollower {
 				n.RaftDebugLog.Info("heartbeat time out, start new election term")
@@ -242,7 +264,7 @@ func (n *Node) startElection(voted bool) {
 	}
 	n.SetState(StateCandidate)
 	// TODO 增加选举超时，如果投票没投自己就取消选举
-	n.HeartBeatTimeoutTicker.Stop()
+	n.heartBeatTimeoutTicker.Stop()
 	n.Term++
 	// 如果已经投过票，就不投票直接开始返回
 	if voted {
@@ -274,8 +296,8 @@ func (n *Node) MsgHandler(msg Msg) {
 	case MsgHeartbeat:
 		n.State = StateFollower
 		rand.Seed(time.Now().UnixNano())
-		duration := time.Duration(TestHeartBeatTimeout + rand.Int63n(5))
-		n.HeartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
+		duration := time.Duration(HeartBeatTimeout + rand.Int63n(5))
+		n.heartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
 		if n.State != StateLeader {
 			// 这里是否拒绝
 			committed := msg.Index
@@ -307,16 +329,22 @@ func (n *Node) MsgHandler(msg Msg) {
 			// 心跳返回正确后，更新readonly的数据
 			n.RaftDebugLog.Info("leader get read index heart beat resp")
 			n.Read.RecvAck(string(msg.Data), msg.From)
-			//status := n.Read.ReadOnlyMap[string(msg.Data)]
-			status := n.Read.NewReadOnlyMap[string(msg.Data)].(ReadIndexStatus)
-			acks := len(status.Acks)
+			status := n.Read.ReadOnlyMap[string(msg.Data)]
 			if n.checkQuorum(status.Acks) && status.State == false {
-				//if acks > 1+(len(n.OtherNode))/2 && status.State == false {
-				n.RaftDebugLog.Warn("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
-				operation := RaftOperation{
-					Value: status.TempValue,
+				n.RaftDebugLog.Warn("HeartBeatResp ====== leader get committed ok ======", len(status.Acks), 1+(len(n.OtherNode))/2)
+				e := Entry{}
+				json.Unmarshal(msg.Data, &e)
+				backOperation := httpAPICenter.RaftOperation{}
+				json.Unmarshal(e.Data, &backOperation)
+				n.RaftDebugLog.Warn("unmarshal", backOperation)
+				operation := httpAPICenter.RaftOperation{
+					Value:      status.TempValue,
+					RequestKey: backOperation.RequestKey,
 				}
+				n.RaftDebugLog.Warn(operation)
+				//n.HttpApi.HttpChan <- operation
 				n.httpChan <- operation
+				n.RaftDebugLog.Warn("node send operation to httpChan")
 				status.State = true
 			}
 		}
@@ -331,13 +359,17 @@ func (n *Node) MsgHandler(msg Msg) {
 				Index: index + 1,
 				Data:  msg.Data,
 			}
-			operation := RaftOperation{}
+			operation := httpAPICenter.RaftOperation{}
 			json.Unmarshal(msg.Data, &operation)
 			if operation.Operation == OperationAdd {
 				n.AddValue(operation.Key, operation.Value)
 			}
 			if operation.Operation == OperationUpdate {
 				n.UpdateValue(operation.Key, operation.Value)
+			}
+			if operation.Operation == OperationGet {
+				value, _ := n.GetValue(operation.Key)
+				operation.Value = value
 			}
 			n.Log.AppendEntry(e.Term, e.Index, e)
 			// Leader收到MsgApp，首先自己添加一条请求，然后自己确认请求
@@ -357,11 +389,10 @@ func (n *Node) MsgHandler(msg Msg) {
 			}
 			n.Visit(broadCastMsgApp)
 		} else {
-			n.RaftDebugLog.Info("follower rcv MsgApp")
 			e := Entry{}
 			json.Unmarshal(msg.Data, &e)
 			// 写入map中
-			operation := RaftOperation{}
+			operation := httpAPICenter.RaftOperation{}
 			json.Unmarshal(e.Data, &operation)
 			if operation.Operation == OperationAdd {
 				n.AddValue(operation.Key, operation.Value)
@@ -369,8 +400,9 @@ func (n *Node) MsgHandler(msg Msg) {
 			if operation.Operation == OperationUpdate {
 				n.UpdateValue(operation.Key, operation.Value)
 			}
+			n.RaftDebugLog.Info("follower rcv MsgApp", operation)
 			isOk, t, i2 := n.Log.AppendEntry(e.Term, e.Index, e)
-			n.RaftDebugLog.Info("=== follower log ", n.Log)
+			n.RaftDebugLog.Trace("=== follower log ", n.Log)
 			n.RaftDebugLog.Info("=== follower map ", n.Map)
 			n.RaftDebugLog.Info(n.Port + " rcv App as follower")
 			broadCastMsgAppResp := Msg{
@@ -386,18 +418,24 @@ func (n *Node) MsgHandler(msg Msg) {
 		}
 	case MsgAppResp:
 		n.RaftDebugLog.Info("leader rcv AppResp", msg.From)
-		n.RaftDebugLog.Info("before ack", n.Read.NewReadOnlyMap)
 		n.Read.RecvAck(string(msg.Index), msg.From)
-		n.RaftDebugLog.Info("after ack", n.Read.NewReadOnlyMap)
-		status := (n.Read.NewReadOnlyMap[string(msg.Index)]).(ReadIndexStatus)
-		n.RaftDebugLog.Info(n.Read.NewReadOnlyMap)
-		acks := len(status.Acks)
+		status := n.Read.ReadOnlyMap[string(msg.Index)]
+		n.RaftDebugLog.Info(n.Read.ReadOnlyMap)
 		if n.checkQuorum(status.Acks) && status.State == false {
-			n.RaftDebugLog.Warn("====== leader get committed ok ======", acks, 1+(len(n.OtherNode))/2)
-			operation := RaftOperation{
-				Value: status.TempValue,
+			n.RaftDebugLog.Warn("AppResp ====== leader get committed ok ======", len(status.Acks), 1+(len(n.OtherNode))/2)
+			e := Entry{}
+			json.Unmarshal(msg.Data, &e)
+			backOperation := httpAPICenter.RaftOperation{}
+			json.Unmarshal(e.Data, &backOperation)
+			n.RaftDebugLog.Warn("unmarshal", backOperation)
+			operation := httpAPICenter.RaftOperation{
+				Value:      status.TempValue,
+				RequestKey: backOperation.RequestKey,
 			}
+			n.RaftDebugLog.Warn(operation)
+			//n.HttpApi.HttpChan <- operation
 			n.httpChan <- operation
+			n.RaftDebugLog.Warn("node send operation to httpChan")
 			status.State = true
 		}
 	case MsgAskVote:
@@ -410,10 +448,10 @@ func (n *Node) MsgHandler(msg Msg) {
 			}
 			var voted bool
 			if msg.Term < n.Term {
-				voteMsg.Data = []byte("REJECT")
+				voteMsg.Data = []byte(VoteReject)
 				voted = false
 			} else {
-				voteMsg.Data = []byte("VOTE")
+				voteMsg.Data = []byte(VoteAccepted)
 				voted = true
 			}
 			go n.MsgSender(voteMsg)
@@ -430,18 +468,15 @@ func (n *Node) MsgHandler(msg Msg) {
 		break
 	case MsgReadIndex:
 		if n.State == StateLeader {
-			operation := RaftOperation{}
+			operation := httpAPICenter.RaftOperation{}
 			if e := json.Unmarshal(msg.Data, &operation); e != nil {
 				n.RaftDebugLog.Error("unmarshal error", e)
 			}
-			requestKey := n.Port +
-				strconv.Itoa(time.Now().Hour()) +
-				strconv.Itoa(time.Now().Minute()) +
-				strconv.Itoa(time.Now().Second())
 			value, err := n.GetValue(operation.Key)
 			if err != nil {
 				break
 			}
+			requestKey := operation.RequestKey
 			n.Read.AddRequest(requestKey, n.Log.Committed, value)
 			n.Read.RecvAck(requestKey, n.Port)
 			msg := Msg{
@@ -471,7 +506,7 @@ func (n *Node) heartBeatTicker() {
 		}
 	}()
 	n.OtherNode[n.Port] = n.Port
-	heartBeat := time.NewTicker(TestHeartBeat * time.Second)
+	heartBeat := time.NewTicker(HeartBeat * time.Second)
 	for {
 		select {
 		case <-heartBeat.C:

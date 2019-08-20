@@ -56,7 +56,7 @@ func TestTickerNanotime(t *testing.T) {
 func TestRand(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < 100; i++ {
-		duration := time.Duration(TestHeartBeatTimeout+rand.Int63n(5)) * time.Second
+		duration := time.Duration(HeartBeatTimeout+rand.Int63n(5)) * time.Second
 		t.Log(duration)
 	}
 }

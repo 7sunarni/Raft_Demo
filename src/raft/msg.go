@@ -23,6 +23,11 @@ const (
 	OperationGet    = "GET"
 )
 
+const (
+	VoteReject   = "REJECT"
+	VoteAccepted = "VOTE"
+)
+
 type Msg struct {
 	Type   int64  `json:"type"`
 	Data   []byte `json:"data"`
@@ -33,8 +38,7 @@ type Msg struct {
 	Reject bool   `json:"reject"`
 }
 
-type HttpMsg struct{
-
+type HttpMsg struct {
 }
 
 type Entry struct {
@@ -52,8 +56,4 @@ type Snapshot struct {
 	SnapshotType int8
 }
 
-type RaftOperation struct {
-	Operation string
-	Key       string
-	Value     int64
-}
+
