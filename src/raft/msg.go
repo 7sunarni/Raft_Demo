@@ -15,6 +15,7 @@ const (
 	MsgCheckQuorum  // 节点请求leader检查状态
 	MsgReadIndex
 	MsgReadIndexResp
+	MsgApiResp // 收到消息开始返回给前端
 )
 
 const (

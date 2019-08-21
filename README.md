@@ -6,10 +6,14 @@
 ## TODO
 1. change to progress
 2. add Debug module -> OK
-3. lock for thread safe
+3. lock for thread safe -> OK
 4. election timeout
-5. cpu occupancy -> Linux 上解决
+5. cpu occupancy -> OK
 6. web front-end show -> WebAssembly
+### 20190821
+7. Follower node rafCRUD API: transfer to Leader to solve
+8. script for test CRUD API 
+9. clear ReadIndex code
 
 ## FIXME
 1. 前端日志会出现两次 -> Fixed 

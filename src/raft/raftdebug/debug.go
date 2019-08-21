@@ -15,7 +15,6 @@ const (
 )
 
 func NewRaftDebugLog() *RaftDebugLog {
-	// TODO 加锁
 	return &RaftDebugLog{
 		LogMutex: sync.Mutex{},
 		Items:    []LogItem{},
@@ -38,6 +37,8 @@ func (r *RaftDebugLog) Trace(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
+	r.LogMutex.Lock()
+	defer r.LogMutex.Unlock()
 	r.Items = append(r.Items, item)
 
 }
@@ -48,6 +49,8 @@ func (r *RaftDebugLog) Info(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
+	r.LogMutex.Lock()
+	defer r.LogMutex.Unlock()
 	r.Items = append(r.Items, item)
 
 }
@@ -58,6 +61,8 @@ func (r *RaftDebugLog) Warn(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
+	r.LogMutex.Lock()
+	defer r.LogMutex.Unlock()
 	r.Items = append(r.Items, item)
 }
 
@@ -67,6 +72,8 @@ func (r *RaftDebugLog) Error(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
+	r.LogMutex.Lock()
+	defer r.LogMutex.Unlock()
 	r.Items = append(r.Items, item)
 }
 
@@ -76,6 +83,8 @@ func (r *RaftDebugLog) Fatal(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
+	r.LogMutex.Lock()
+	defer r.LogMutex.Unlock()
 	r.Items = append(r.Items, item)
 }
 

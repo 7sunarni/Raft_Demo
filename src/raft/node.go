@@ -43,8 +43,6 @@ type Node struct {
 
 	httpChan chan httpAPICenter.RaftOperation
 
-	//*httpAPICenter.HttpApi
-
 	// 心跳超时
 	heartBeatTimeoutTicker *time.Ticker
 
@@ -62,6 +60,8 @@ type Node struct {
 
 	// 存放k-v的封装集合
 	*ValueMap
+
+	leader string
 }
 
 var n *Node
@@ -109,10 +109,6 @@ func (n *Node) init() {
 	n.RaftDebugLog = raftdebug.NewRaftDebugLog()
 	n.msgChan = make(chan Msg, 10)
 	n.httpChan = make(chan httpAPICenter.RaftOperation, 10)
-	//n.HttpApi = httpAPICenter.NewHttpApi()
-	//// api中的log和当前的log是同一个
-	//n.HttpApi.DebugLog = n.RaftDebugLog
-	//go n.HttpApi.Run()
 	n.Read = NewReadOnly()
 }
 
@@ -157,23 +153,16 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 		strconv.Itoa(time.Now().Minute()) +
 		strconv.Itoa(time.Now().Second())
 	operation.RequestKey = requestKey
+	operation.Port = n.Port
 	// 生成requestKey之后返回到data里面去
 	data, _ = json.Marshal(operation)
 	msg := Msg{
 		From: n.Port,
 		To:   n.Port,
 		Data: data,
+		Type: MsgReadIndex,
 	}
-	if operation.Operation == OperationAdd {
-		msg.Type = MsgApp
-	}
-	if operation.Operation == OperationUpdate {
-		msg.Type = MsgApp
-	}
-	if operation.Operation == OperationGet {
-		msg.Type = MsgApp
-	}
-	n.RaftDebugLog.Info("Leader rcv operation")
+	n.RaftDebugLog.Info("node rcv operation")
 	n.RaftDebugLog.Info(msg)
 	n.msgChan <- msg
 	var respMsg httpAPICenter.RaftOperation
@@ -187,7 +176,7 @@ forLoop:
 			break forLoop
 		}
 	}
-	n.RaftDebugLog.Info(requestKey, respMsg.RequestKey)
+	n.RaftDebugLog.Info("rcv httpChan", requestKey, respMsg.RequestKey)
 	if requestKey == respMsg.RequestKey {
 		marshal, _ := json.Marshal(respMsg)
 		w.Write(marshal)
@@ -295,6 +284,8 @@ func (n *Node) MsgHandler(msg Msg) {
 		break
 	case MsgHeartbeat:
 		n.State = StateFollower
+		// 更新当前节点的leader节点
+		n.leader = msg.From
 		rand.Seed(time.Now().UnixNano())
 		duration := time.Duration(HeartBeatTimeout + rand.Int63n(5))
 		n.heartBeatTimeoutTicker = time.NewTicker(duration * time.Second)
@@ -331,21 +322,6 @@ func (n *Node) MsgHandler(msg Msg) {
 			n.Read.RecvAck(string(msg.Data), msg.From)
 			status := n.Read.ReadOnlyMap[string(msg.Data)]
 			if n.checkQuorum(status.Acks) && status.State == false {
-				n.RaftDebugLog.Warn("HeartBeatResp ====== leader get committed ok ======", len(status.Acks), 1+(len(n.OtherNode))/2)
-				e := Entry{}
-				json.Unmarshal(msg.Data, &e)
-				backOperation := httpAPICenter.RaftOperation{}
-				json.Unmarshal(e.Data, &backOperation)
-				n.RaftDebugLog.Warn("unmarshal", backOperation)
-				operation := httpAPICenter.RaftOperation{
-					Value:      status.TempValue,
-					RequestKey: backOperation.RequestKey,
-				}
-				n.RaftDebugLog.Warn(operation)
-				//n.HttpApi.HttpChan <- operation
-				n.httpChan <- operation
-				n.RaftDebugLog.Warn("node send operation to httpChan")
-				status.State = true
 			}
 		}
 		break
@@ -361,6 +337,7 @@ func (n *Node) MsgHandler(msg Msg) {
 			}
 			operation := httpAPICenter.RaftOperation{}
 			json.Unmarshal(msg.Data, &operation)
+			// TODO error处理
 			if operation.Operation == OperationAdd {
 				n.AddValue(operation.Key, operation.Value)
 			}
@@ -431,11 +408,10 @@ func (n *Node) MsgHandler(msg Msg) {
 			operation := httpAPICenter.RaftOperation{
 				Value:      status.TempValue,
 				RequestKey: backOperation.RequestKey,
+				Port:       backOperation.Port,
 			}
 			n.RaftDebugLog.Warn(operation)
-			//n.HttpApi.HttpChan <- operation
-			n.httpChan <- operation
-			n.RaftDebugLog.Warn("node send operation to httpChan")
+			n.dealCommittedOperation(operation)
 			status.State = true
 		}
 	case MsgAskVote:
@@ -467,34 +443,24 @@ func (n *Node) MsgHandler(msg Msg) {
 		}
 		break
 	case MsgReadIndex:
+		// 如果不是Leader收到请求转发给Leader处理请求
+		if n.Type == StateFollower || n.Type == StateCandidate {
+			msg.From = n.Port
+			msg.To = n.leader
+			go n.MsgSender(msg)
+			n.RaftDebugLog.Info("send MsgReadIndex to leader", msg.To)
+		}
 		if n.State == StateLeader {
-			operation := httpAPICenter.RaftOperation{}
-			if e := json.Unmarshal(msg.Data, &operation); e != nil {
-				n.RaftDebugLog.Error("unmarshal error", e)
-			}
-			value, err := n.GetValue(operation.Key)
-			if err != nil {
-				break
-			}
-			requestKey := operation.RequestKey
-			n.Read.AddRequest(requestKey, n.Log.Committed, value)
-			n.Read.RecvAck(requestKey, n.Port)
-			msg := Msg{
-				Type:  MsgHeartbeat,
-				From:  n.Port,
-				Data:  []byte(requestKey),
-				Term:  n.Term,
-				Index: n.Log.Committed + 100,
-			}
-			n.RaftDebugLog.Trace("leader send read index heart beat")
-			n.Visit(msg)
+			n.RaftDebugLog.Info("leader rcv MsgReadIndex msg", msg)
+			msg.Type = MsgApp
+			n.msgChan <- msg
 		}
-		if n.Type == StateFollower {
-			// 转发给leader处理
-		}
-		if n.Type == StateCandidate {
-			// 转发给leader处理
-		}
+		break
+	case MsgReadIndexResp:
+		operation := httpAPICenter.RaftOperation{}
+		json.Unmarshal(msg.Data, &operation)
+		n.RaftDebugLog.Warn("rcv MsgReadIndexResp", msg.From, msg.To, operation)
+		n.httpChan <- operation
 	}
 
 }
@@ -546,6 +512,24 @@ func (n *Node) becomeLeader() {
 }
 
 func (n *Node) changeLeader() {
+
+}
+
+// 消息确认后返回给请求发起的节点
+func (n *Node) dealCommittedOperation(operation httpAPICenter.RaftOperation) {
+	data, _ := json.Marshal(operation)
+	msg := Msg{
+		Type: MsgReadIndexResp,
+		From: n.Port,
+		To:   operation.Port,
+		Data: data,
+	}
+	n.RaftDebugLog.Warn("deal operation", msg.To, msg.From, operation)
+	if n.Port == operation.Port {
+		n.msgChan <- msg
+	} else {
+		go n.MsgSender(msg)
+	}
 
 }
 

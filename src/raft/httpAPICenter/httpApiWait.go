@@ -27,6 +27,7 @@ type RaftOperation struct {
 	Key        string
 	Value      int64
 	RequestKey string // 用于在服务内部生成key调用
+	Port       string // 操作发起者的端口
 }
 
 func NewHttpApi() *HttpApi {
