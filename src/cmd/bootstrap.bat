@@ -1,0 +1,5 @@
+start cmd /k "title leader && cd .. && go run main.go"
+start cmd /k "title fo_9002 && cd .. && go run main.go 9002"
+start cmd /k "title fo_9003 && cd .. && go run main.go 9003"
+start cmd /k "title fo_9004 && cd .. && go run main.go 9004"
+start cmd /k "title fo_9005 && cd .. && go run main.go 9005"

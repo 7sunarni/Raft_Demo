@@ -1,6 +1,21 @@
 # 学习Etcd-Raft
 
 学习Etcd-Raft的demo
+## Raft中用来请求的api
+**1. 读的api，用于读取数据**
+``` shell
+curl 'http://localhost:PORT/raft' -X POST --data '{"Operation":"GET","Key":"key"}'
+```
+
+**2. 写的api，用于存放数据**
+``` shell
+curl 'http://localhost:PORT/raft' -X POST --data '{"Operation":"ADD","Key":"apdo","Value":100}'
+```
+
+**3. debug的api，用于读取日志信息**
+``` shell
+curl 'http://localhost:PORT/debug'
+```
 
 # Raft-Demo
 ## TODO
@@ -30,3 +45,5 @@ if (ajax.readyState !== 4 || ajax.status !== 200) {
 之前在main方法里面写了一个for死循环，导致CPU占用过高，每个进程占用CPU20%以上，五个进程开启之后CPU占用100%
 因为里面有个HTTP SERVER，所以main方法里面去掉for循环，也不用在协程里面启动。
 用pprof工具没有查出来问题
+
+3. 初始化的时候心跳太慢，导致必须要第一次心跳之后才能从从节点开始读写数据
