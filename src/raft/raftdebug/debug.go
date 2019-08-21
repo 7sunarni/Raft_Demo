@@ -16,14 +16,14 @@ const (
 
 func NewRaftDebugLog() *RaftDebugLog {
 	return &RaftDebugLog{
-		LogMutex: sync.Mutex{},
-		Items:    []LogItem{},
+		m:     sync.Mutex{},
+		items: []LogItem{},
 	}
 }
 
 type RaftDebugLog struct {
-	LogMutex sync.Mutex
-	Items    []LogItem
+	m     sync.Mutex
+	items []LogItem
 }
 type LogItem struct {
 	Type      int64
@@ -37,9 +37,9 @@ func (r *RaftDebugLog) Trace(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
-	r.LogMutex.Lock()
-	defer r.LogMutex.Unlock()
-	r.Items = append(r.Items, item)
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.items = append(r.items, item)
 
 }
 
@@ -49,9 +49,9 @@ func (r *RaftDebugLog) Info(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
-	r.LogMutex.Lock()
-	defer r.LogMutex.Unlock()
-	r.Items = append(r.Items, item)
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.items = append(r.items, item)
 
 }
 
@@ -61,9 +61,9 @@ func (r *RaftDebugLog) Warn(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
-	r.LogMutex.Lock()
-	defer r.LogMutex.Unlock()
-	r.Items = append(r.Items, item)
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.items = append(r.items, item)
 }
 
 func (r *RaftDebugLog) Error(a ...interface{}) {
@@ -72,9 +72,9 @@ func (r *RaftDebugLog) Error(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
-	r.LogMutex.Lock()
-	defer r.LogMutex.Unlock()
-	r.Items = append(r.Items, item)
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.items = append(r.items, item)
 }
 
 func (r *RaftDebugLog) Fatal(a ...interface{}) {
@@ -83,16 +83,16 @@ func (r *RaftDebugLog) Fatal(a ...interface{}) {
 		TimeStamp: time.Now().Unix() * 1000,
 		Value:     fmt.Sprint(a),
 	}
-	r.LogMutex.Lock()
-	defer r.LogMutex.Unlock()
-	r.Items = append(r.Items, item)
+	r.m.Lock()
+	defer r.m.Unlock()
+	r.items = append(r.items, item)
 }
 
 // 把日志读取到出来返回给前端展示
 func (r *RaftDebugLog) GetLogs() []LogItem {
-	r.LogMutex.Lock()
-	defer r.LogMutex.Unlock()
-	items := r.Items
-	r.Items = []LogItem{}
+	r.m.Lock()
+	defer r.m.Unlock()
+	items := r.items
+	r.items = []LogItem{}
 	return items
 }

@@ -10,10 +10,12 @@
 4. election timeout
 5. cpu occupancy -> OK
 6. web front-end show -> WebAssembly
+7. node break & rejoin
+8. design log_unstable flush to log_stable
 ### 20190821
-7. Follower node rafCRUD API: transfer to Leader to solve
-8. script for test CRUD API 
-9. clear ReadIndex code
+7. Follower node raf CRUD API: transfer to Leader to solve -> OK
+8. script for test CRUD API
+9. clear ReadIndex code -> OK
 
 ## FIXME
 1. 前端日志会出现两次 -> Fixed 

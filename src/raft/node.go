@@ -167,13 +167,15 @@ func raftHandler(w http.ResponseWriter, r *http.Request) {
 	n.msgChan <- msg
 	var respMsg httpAPICenter.RaftOperation
 	httpTimeoutTicker := time.NewTicker(20 * time.Second)
-forLoop:
+	// TODO 改为Context来实现
+httpTimeOutWait:
 	for {
 		select {
 		case respMsg = <-n.httpChan:
-			break forLoop
+			httpTimeoutTicker.Stop()
+			break httpTimeOutWait
 		case <-httpTimeoutTicker.C:
-			break forLoop
+			break httpTimeOutWait
 		}
 	}
 	n.RaftDebugLog.Info("rcv httpChan", requestKey, respMsg.RequestKey)
@@ -209,7 +211,7 @@ func (n *Node) MsgSender(msg Msg) {
 		}
 	}()
 	n.RaftDebugLog.Trace("send msg", msg.Type, msg.To)
-	// TODO 不用修改为全局的HttpClient，后期会改为gRPC方式用于节点间通信
+	// 不用修改为全局的HttpClient，后期会改为gRPC方式用于节点间通信
 	cli := http.Client{}
 	msgReader, _ := json.Marshal(msg)
 	reader := bytes.NewReader(msgReader)
